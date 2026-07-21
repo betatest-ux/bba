@@ -5,22 +5,26 @@ export const beforeSyncWithSearch: BeforeSync = async ({ req, originalDoc, searc
     doc: { relationTo: collection },
   } = searchDoc
 
-  const { slug, id, categories, title, meta } = originalDoc
+  const { slug, id, categories, title, question, meta } = originalDoc
 
   const modifiedDoc: DocToSync = {
     ...searchDoc,
-    slug,
+    slug: slug ?? null,
+    title: title || question || searchDoc.title,
     meta: {
       ...meta,
-      title: meta?.title || title,
+      title: meta?.title || title || question,
       image: meta?.image?.id || meta?.image,
-      description: meta?.description,
+      description: meta?.description || originalDoc.summary || null,
     },
     categories: [],
   }
 
   if (categories && Array.isArray(categories) && categories.length > 0) {
+    // News relates to `categories`; projects relate to `project-categories`.
+    const categoriesCollection = collection === 'projects' ? 'project-categories' : 'categories'
     const populatedCategories: { id: string | number; title: string }[] = []
+
     for (const category of categories) {
       if (!category) {
         continue
@@ -32,7 +36,7 @@ export const beforeSyncWithSearch: BeforeSync = async ({ req, originalDoc, searc
       }
 
       const doc = await req.payload.findByID({
-        collection: 'categories',
+        collection: categoriesCollection,
         id: category,
         disableErrors: true,
         depth: 0,
@@ -50,7 +54,7 @@ export const beforeSyncWithSearch: BeforeSync = async ({ req, originalDoc, searc
     }
 
     modifiedDoc.categories = populatedCategories.map((each) => ({
-      relationTo: 'categories',
+      relationTo: categoriesCollection,
       categoryID: String(each.id),
       title: each.title,
     }))

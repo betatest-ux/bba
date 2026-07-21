@@ -6,7 +6,6 @@ import {
   lexicalEditor,
 } from '@payloadcms/richtext-lexical'
 import path from 'path'
-import { createFolderField } from 'payload'
 import { fileURLToPath } from 'url'
 
 import { anyone } from '../access/anyone'
@@ -17,6 +16,7 @@ const dirname = path.dirname(filename)
 
 export const Media: CollectionConfig = {
   slug: 'media',
+  folders: true,
   access: {
     create: authenticated,
     delete: authenticated,
@@ -27,9 +27,12 @@ export const Media: CollectionConfig = {
     {
       name: 'alt',
       type: 'text',
-      //required: true,
+      admin: {
+        description:
+          'Describe the image for people using screen readers, e.g. “Volunteers packing food parcels at Bangor Street”. Required — accessibility depends on it.',
+      },
+      required: true,
     },
-    createFolderField({ relationTo: 'folders' }),
     {
       name: 'caption',
       type: 'richText',

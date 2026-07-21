@@ -43,15 +43,15 @@
   --breakpoint-lg: 64rem;
   --breakpoint-xl: 80rem;
   --breakpoint-2xl: 86rem;
-  --font-mono: var(--font-geist-mono);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-figtree);
+  --font-display: var(--font-bricolage);
 }
 
 @layer utilities {
   .container {
     width: 100%;
     margin-inline: auto;
-    padding-inline: 1rem;
+    padding-inline: 1.5rem;
   }
 
   @variant sm {
@@ -86,81 +86,77 @@
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* BBAlliance palette — see DESIGN.md. Warm “cotton & soot” neutrals,   */
+/* Loom Indigo primary, admin-selectable accent injected by the layout  */
+/* as --bb-accent / --bb-accent-on / --bb-accent-soft.                  */
+/* ------------------------------------------------------------------ */
+
 :root {
-  --background: oklch(100% 0 0deg);
-  --foreground: oklch(14.5% 0 0deg);
-  --card: oklch(96.5% 0.005 265deg);
-  --card-foreground: oklch(14.5% 0 0deg);
-  --popover: oklch(100% 0 0deg);
-  --popover-foreground: oklch(14.5% 0 0deg);
-  --primary: oklch(20.5% 0 0deg);
-  --primary-foreground: oklch(98.5% 0 0deg);
-  --secondary: oklch(97% 0 0deg);
-  --secondary-foreground: oklch(20.5% 0 0deg);
-  --muted: oklch(97% 0 0deg);
-  --muted-foreground: oklch(55.6% 0 0deg);
-  --accent: oklch(97% 0 0deg);
-  --accent-foreground: oklch(20.5% 0 0deg);
-  --destructive: oklch(57.7% 0.245 27.325deg);
-  --destructive-foreground: oklch(57.7% 0.245 27.325deg);
-  --border: oklch(92.2% 0 0deg);
-  --input: oklch(92.2% 0 0deg);
-  --ring: oklch(70.8% 0 0deg);
-  --chart-1: oklch(64.6% 0.222 41.116deg);
-  --chart-2: oklch(60% 0.118 184.704deg);
-  --chart-3: oklch(39.8% 0.07 227.392deg);
-  --chart-4: oklch(82.8% 0.189 84.429deg);
-  --chart-5: oklch(76.9% 0.188 70.08deg);
-  --radius: 0.625rem;
-  --sidebar: oklch(98.5% 0 0deg);
-  --sidebar-foreground: oklch(14.5% 0 0deg);
-  --sidebar-primary: oklch(20.5% 0 0deg);
-  --sidebar-primary-foreground: oklch(98.5% 0 0deg);
-  --sidebar-accent: oklch(97% 0 0deg);
-  --sidebar-accent-foreground: oklch(20.5% 0 0deg);
-  --sidebar-border: oklch(92.2% 0 0deg);
-  --sidebar-ring: oklch(70.8% 0 0deg);
-  --success: oklch(78% 0.08 200deg);
-  --warning: oklch(89% 0.1 75deg);
-  --error: oklch(75% 0.15 25deg);
+  /* brand constants */
+  --bb-loom: #1f3a5f;
+  --bb-brick: #9e3b32;
+  --bb-moor: #3d6b50;
+  --bb-gold: #d98e32;
+
+  /* accent trio — overridden by the Appearance setting at render time */
+  --bb-accent: #9e3b32;
+  --bb-accent-on: #ffffff;
+  --bb-accent-soft: #f3e1de;
+
+  /* surfaces & text */
+  --background: #f6f2ea;
+  --foreground: #191e24;
+  --card: #fbf9f4;
+  --card-foreground: #191e24;
+  --popover: #fbf9f4;
+  --popover-foreground: #191e24;
+  --primary: #1f3a5f;
+  --primary-foreground: #ffffff;
+  --secondary: #ece6d9;
+  --secondary-foreground: #191e24;
+  --muted: #ece6d9;
+  --muted-foreground: #575145;
+  --accent: #ece6d9;
+  --accent-foreground: #191e24;
+  --destructive: #9e3b32;
+  --destructive-foreground: #ffffff;
+  --border: #ddd5c5;
+  --input: #ddd5c5;
+  --ring: var(--bb-accent);
+  --radius: 0.75rem;
+  --success: #3d6b50;
+  --warning: #d98e32;
+  --error: #9e3b32;
 }
 
 [data-theme='dark'] {
-  --background: oklch(14.5% 0 0deg);
-  --foreground: oklch(98.5% 0 0deg);
-  --card: oklch(17% 0 0deg);
-  --card-foreground: oklch(98.5% 0 0deg);
-  --popover: oklch(14.5% 0 0deg);
-  --popover-foreground: oklch(98.5% 0 0deg);
-  --primary: oklch(98.5% 0 0deg);
-  --primary-foreground: oklch(20.5% 0 0deg);
-  --secondary: oklch(26.9% 0 0deg);
-  --secondary-foreground: oklch(98.5% 0 0deg);
-  --muted: oklch(26.9% 0 0deg);
-  --muted-foreground: oklch(70.8% 0 0deg);
-  --accent: oklch(26.9% 0 0deg);
-  --accent-foreground: oklch(98.5% 0 0deg);
-  --destructive: oklch(39.6% 0.141 25.723deg);
-  --destructive-foreground: oklch(63.7% 0.237 25.331deg);
-  --border: oklch(26.9% 0 0deg);
-  --input: oklch(26.9% 0 0deg);
-  --ring: oklch(43.9% 0 0deg);
-  --chart-1: oklch(48.8% 0.243 264.376deg);
-  --chart-2: oklch(69.6% 0.17 162.48deg);
-  --chart-3: oklch(76.9% 0.188 70.08deg);
-  --chart-4: oklch(62.7% 0.265 303.9deg);
-  --chart-5: oklch(64.5% 0.246 16.439deg);
-  --sidebar: oklch(20.5% 0 0deg);
-  --sidebar-foreground: oklch(98.5% 0 0deg);
-  --sidebar-primary: oklch(48.8% 0.243 264.376deg);
-  --sidebar-primary-foreground: oklch(98.5% 0 0deg);
-  --sidebar-accent: oklch(26.9% 0 0deg);
-  --sidebar-accent-foreground: oklch(98.5% 0 0deg);
-  --sidebar-border: oklch(26.9% 0 0deg);
-  --sidebar-ring: oklch(43.9% 0 0deg);
-  --success: oklch(28% 0.1 200deg);
-  --warning: oklch(35% 0.08 70deg);
-  --error: oklch(45% 0.1 25deg);
+  --bb-accent: #d98a82;
+  --bb-accent-on: #191e24;
+  --bb-accent-soft: #3a2724;
+
+  --background: #191e24;
+  --foreground: #e8e4dc;
+  --card: #232a33;
+  --card-foreground: #e8e4dc;
+  --popover: #232a33;
+  --popover-foreground: #e8e4dc;
+  --primary: #93b4dc;
+  --primary-foreground: #191e24;
+  --secondary: #232a33;
+  --secondary-foreground: #e8e4dc;
+  --muted: #232a33;
+  --muted-foreground: #a8a296;
+  --accent: #2b333e;
+  --accent-foreground: #e8e4dc;
+  --destructive: #d98a82;
+  --destructive-foreground: #191e24;
+  --border: #38404b;
+  --input: #38404b;
+  --ring: var(--bb-accent);
+  --success: #8fbea1;
+  --warning: #e3a85c;
+  --error: #d98a82;
 }
 
 @theme inline {
@@ -183,26 +179,22 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-error: var(--error);
+
+  /* brand utilities: bg-brand, text-brand, border-brand, bg-brand-soft… */
+  --color-brand: var(--bb-accent);
+  --color-brand-on: var(--bb-accent-on);
+  --color-brand-soft: var(--bb-accent-soft);
+  --color-loom: var(--bb-loom);
+  --color-brick: var(--bb-brick);
+  --color-moor: var(--bb-moor);
+  --color-gold: var(--bb-gold);
 }
 
 @layer base {
@@ -211,6 +203,91 @@
   }
   body {
     @apply bg-background text-foreground min-h-[100vh] flex flex-col;
+    font-family: var(--font-sans);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    font-weight: 700;
+    text-wrap: balance;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+    font-weight: 650;
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* Visible, high-contrast focus for keyboard users — WCAG 2.2 */
+  :focus-visible {
+    outline: 3px solid var(--bb-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--bb-accent);
+    color: var(--bb-accent-on);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  /* Fluid display sizes (see DESIGN.md type scale) */
+  .text-display {
+    font-size: clamp(2.5rem, 2.5vw + 1.75rem, 4.5rem);
+    line-height: 1.05;
+  }
+  .text-h1 {
+    font-size: clamp(2.25rem, 2vw + 1.5rem, 3.5rem);
+    line-height: 1.1;
+  }
+  .text-h2 {
+    font-size: clamp(1.75rem, 1.2vw + 1.25rem, 2.5rem);
+    line-height: 1.15;
+  }
+  .text-h3 {
+    font-size: clamp(1.375rem, 0.6vw + 1.15rem, 1.75rem);
+    line-height: 1.2;
+  }
+
+  /* Accent “thread” — the 3px signature line (see DESIGN.md) */
+  .thread-top {
+    position: relative;
+  }
+  .thread-top::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    height: 3px;
+    background: var(--bb-accent);
+    border-radius: 999px;
+    opacity: 0;
+    transition: opacity 200ms ease;
+  }
+  .thread-top:hover::before,
+  .thread-top:focus-within::before {
+    opacity: 1;
   }
 }
 
@@ -221,4 +298,15 @@ html {
 html[data-theme='dark'],
 html[data-theme='light'] {
   opacity: initial;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -2,8 +2,12 @@ import { PreviewSearchParams } from '@/app/(frontend)/next/preview/route'
 import { PayloadRequest, CollectionSlug } from 'payload'
 
 const collectionPrefixMap: Partial<Record<CollectionSlug, string>> = {
-  posts: '/posts',
+  appeals: '/appeals',
+  events: '/events',
+  news: '/news',
   pages: '',
+  projects: '/activities',
+  vacancies: '/jobs',
 }
 
 type Props = {

@@ -1,16 +1,44 @@
-import { mongooseAdapter } from '@payloadcms/db-mongodb'
+import { postgresAdapter } from '@payloadcms/db-postgres'
+import { sqliteAdapter } from '@payloadcms/db-sqlite'
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
+import { resendAdapter } from '@payloadcms/email-resend'
 import sharp from 'sharp'
 import path from 'path'
 import { buildConfig, PayloadRequest } from 'payload'
 import { fileURLToPath } from 'url'
 
+import { ActivityLog } from './collections/ActivityLog'
+import { Appeals } from './collections/Appeals'
 import { Categories } from './collections/Categories'
+import { CVUploads } from './collections/CVUploads'
+import { Events } from './collections/Events'
+import { FAQs } from './collections/FAQs'
+import { JobApplications } from './collections/JobApplications'
+import { LibraryDocuments } from './collections/LibraryDocuments'
 import { Media } from './collections/Media'
+import { News } from './collections/News'
+import { NewsletterSubscribers } from './collections/NewsletterSubscribers'
 import { Pages } from './collections/Pages'
-import { Posts } from './collections/Posts'
+import { People } from './collections/People'
+import { Partners } from './collections/Partners'
+import { ProjectCategories } from './collections/ProjectCategories'
+import { Projects } from './collections/Projects'
+import { Testimonials } from './collections/Testimonials'
 import { Users } from './collections/Users'
+import { Vacancies } from './collections/Vacancies'
 import { Footer } from './Footer/config'
 import { Header } from './Header/config'
+import { AnnouncementBar } from './globals/AnnouncementBar'
+import { Appearance } from './globals/Appearance'
+import { ContactSettings } from './globals/ContactSettings'
+import { CookieSettings } from './globals/CookieSettings'
+import { CustomCode } from './globals/CustomCode'
+import { DonationSettings } from './globals/DonationSettings'
+import { EmailSettings } from './globals/EmailSettings'
+import { MaintenanceMode } from './globals/MaintenanceMode'
+import { SEOSettings } from './globals/SEOSettings'
+import { SiteSettings } from './globals/SiteSettings'
+import { withActivityLog, withGlobalActivityLog } from './hooks/activityLog'
 import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
@@ -18,14 +46,37 @@ import { getServerSideURL } from './utilities/getURL'
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
+const databaseURI = process.env.DATABASE_URI || process.env.DATABASE_URL || 'file:./bba.db'
+
+/**
+ * Email: Resend if RESEND_API_KEY is set, SMTP via Nodemailer if SMTP_HOST is
+ * set, otherwise Payload's console logger (local dev). See .env.example.
+ */
+const emailAdapter = process.env.RESEND_API_KEY
+  ? resendAdapter({
+      apiKey: process.env.RESEND_API_KEY,
+      defaultFromAddress: process.env.EMAIL_FROM || 'noreply@bballiance.org.uk',
+      defaultFromName: process.env.EMAIL_FROM_NAME || 'BBAlliance',
+    })
+  : process.env.SMTP_HOST
+    ? nodemailerAdapter({
+        defaultFromAddress: process.env.EMAIL_FROM || 'noreply@bballiance.org.uk',
+        defaultFromName: process.env.EMAIL_FROM_NAME || 'BBAlliance',
+        transportOptions: {
+          auth: {
+            pass: process.env.SMTP_PASS,
+            user: process.env.SMTP_USER,
+          },
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT || 587),
+        },
+      })
+    : undefined
+
 export default buildConfig({
   admin: {
     components: {
-      // The `BeforeLogin` component renders a message that you see while logging into your admin panel.
-      // Feel free to delete this at any time. Simply remove the line below.
       beforeLogin: ['@/components/BeforeLogin'],
-      // The `BeforeDashboard` component renders the 'welcome' block that you see after logging into your admin panel.
-      // Feel free to delete this at any time. Simply remove the line below.
       beforeDashboard: ['@/components/BeforeDashboard'],
     },
     importMap: {
@@ -57,38 +108,77 @@ export default buildConfig({
   },
   // This config helps us configure global or default features that the other editors can inherit
   editor: defaultLexical,
-  db: mongooseAdapter({
-    url: process.env.DATABASE_URL,
-  }),
+  // Postgres in production (set DATABASE_URI to a postgres:// URL), SQLite for
+  // zero-dependency local development (file: URL, the default).
+  db: databaseURI.startsWith('postgres')
+    ? postgresAdapter({
+        pool: { connectionString: databaseURI },
+      })
+    : sqliteAdapter({
+        client: { url: databaseURI },
+      }),
   collections: [
-    {
-      slug: 'folders',
-      folders: true,
-      admin: {
-        useAsTitle: 'name',
-      },
-      fields: [
-        {
-          name: 'name',
-          type: 'text',
-          required: true,
-          label: 'Folder Name',
-        },
-      ],
-    },
-    Pages,
-    Posts,
-    Media,
-    Categories,
-    Users,
+    // Content
+    withActivityLog(Pages),
+    withActivityLog(News),
+    withActivityLog(Projects),
+    withActivityLog(ProjectCategories),
+    withActivityLog(People),
+    withActivityLog(Vacancies),
+    withActivityLog(Events),
+    withActivityLog(Appeals),
+    withActivityLog(Testimonials),
+    withActivityLog(Partners),
+    withActivityLog(FAQs),
+    withActivityLog(LibraryDocuments),
+    withActivityLog(Categories),
+    withActivityLog(Media),
+    // Inbox
+    JobApplications,
+    CVUploads,
+    NewsletterSubscribers,
+    // Admin
+    withActivityLog(Users),
+    ActivityLog,
   ],
   cors: [getServerSideURL()].filter(Boolean),
-  globals: [Header, Footer],
+  email: emailAdapter,
+  globals: [
+    withGlobalActivityLog(Header),
+    withGlobalActivityLog(Footer),
+    withGlobalActivityLog(SiteSettings),
+    withGlobalActivityLog(ContactSettings),
+    withGlobalActivityLog(Appearance),
+    withGlobalActivityLog(AnnouncementBar),
+    withGlobalActivityLog(DonationSettings),
+    withGlobalActivityLog(EmailSettings),
+    withGlobalActivityLog(SEOSettings),
+    withGlobalActivityLog(CustomCode),
+    withGlobalActivityLog(CookieSettings),
+    withGlobalActivityLog(MaintenanceMode),
+  ],
+  localization: {
+    defaultLocale: 'en',
+    fallback: true,
+    locales: [
+      { code: 'en', label: 'English' },
+      // Scaffolded for future translation (large South Asian communities in
+      // Blackburn with Darwen). Hidden on the public site until the language
+      // switcher is enabled in Appearance settings — translating is then a
+      // content task, not a rebuild.
+      { code: 'ur', label: 'اردو (Urdu)', rtl: true },
+    ],
+  },
   plugins,
   secret: process.env.PAYLOAD_SECRET,
   sharp,
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
+  },
+  upload: {
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10 MB — big enough for print-quality photos and CVs
+    },
   },
   jobs: {
     access: {

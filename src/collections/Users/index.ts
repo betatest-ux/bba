@@ -1,27 +1,59 @@
 import type { CollectionConfig } from 'payload'
 
-import { authenticated } from '../../access/authenticated'
+import { isAdmin, isAdminFieldLevel, isAdminOrSelf, isStaff } from '@/access/roles'
 
 export const Users: CollectionConfig = {
   slug: 'users',
   access: {
-    admin: authenticated,
-    create: authenticated,
-    delete: authenticated,
-    read: authenticated,
-    update: authenticated,
+    // Any staff role may sign in to the admin panel; what they can do inside
+    // is governed by per-collection access + the restrictPublish hook.
+    admin: ({ req }) => Boolean(req.user),
+    create: isAdmin,
+    delete: isAdmin,
+    read: isAdminOrSelf,
+    unlock: isAdmin,
+    update: isAdminOrSelf,
   },
   admin: {
-    defaultColumns: ['name', 'email'],
+    defaultColumns: ['name', 'email', 'roles'],
+    description:
+      'People who can sign in to this admin panel. Admins manage everything; editors manage content; contributors can only save drafts.',
+    group: 'Admin',
     useAsTitle: 'name',
   },
-  auth: true,
+  auth: {
+    // Basic brute-force protection: 5 attempts, then locked for 10 minutes.
+    lockTime: 10 * 60 * 1000,
+    maxLoginAttempts: 5,
+  },
   fields: [
     {
       name: 'name',
       type: 'text',
+      required: true,
+    },
+    {
+      name: 'roles',
+      type: 'select',
+      access: {
+        // Only admins may grant or change roles — otherwise anyone could
+        // promote themselves.
+        create: isAdminFieldLevel,
+        update: isAdminFieldLevel,
+      },
+      admin: {
+        description:
+          'Admin: everything, including settings and users. Editor: all content, no settings. Contributor: drafts only, cannot publish.',
+      },
+      defaultValue: ['editor'],
+      hasMany: true,
+      options: [
+        { label: 'Admin', value: 'admin' },
+        { label: 'Editor', value: 'editor' },
+        { label: 'Contributor', value: 'contributor' },
+      ],
+      required: true,
     },
   ],
   timestamps: true,
-  versions: false,
 }

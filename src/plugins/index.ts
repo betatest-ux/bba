@@ -1,5 +1,4 @@
 import { formBuilderPlugin } from '@payloadcms/plugin-form-builder'
-import { nestedDocsPlugin } from '@payloadcms/plugin-nested-docs'
 import { redirectsPlugin } from '@payloadcms/plugin-redirects'
 import { seoPlugin } from '@payloadcms/plugin-seo'
 import { searchPlugin } from '@payloadcms/plugin-search'
@@ -10,14 +9,15 @@ import { FixedToolbarFeature, HeadingFeature, lexicalEditor } from '@payloadcms/
 import { searchFields } from '@/search/fieldOverrides'
 import { beforeSyncWithSearch } from '@/search/beforeSync'
 
-import { Page, Post } from '@/payload-types'
+import { isAdminOrEditor } from '@/access/roles'
+import { Page, Project, News as NewsType } from '@/payload-types'
 import { getServerSideURL } from '@/utilities/getURL'
 
-const generateTitle: GenerateTitle<Post | Page> = ({ doc }) => {
-  return doc?.title ? `${doc.title} | Payload Website Template` : 'Payload Website Template'
+const generateTitle: GenerateTitle<NewsType | Page | Project> = ({ doc }) => {
+  return doc?.title ? `${doc.title} | BBAlliance` : 'BBAlliance'
 }
 
-const generateURL: GenerateURL<Post | Page> = ({ doc }) => {
+const generateURL: GenerateURL<NewsType | Page | Project> = ({ doc }) => {
   const url = getServerSideURL()
 
   return doc?.slug ? `${url}/${doc.slug}` : url
@@ -25,8 +25,18 @@ const generateURL: GenerateURL<Post | Page> = ({ doc }) => {
 
 export const plugins: Plugin[] = [
   redirectsPlugin({
-    collections: ['pages', 'posts'],
+    collections: ['pages', 'news', 'projects', 'events', 'appeals', 'vacancies'],
     overrides: {
+      access: {
+        create: isAdminOrEditor,
+        delete: isAdminOrEditor,
+        update: isAdminOrEditor,
+      },
+      admin: {
+        description:
+          'Send an old address to a new one — essential when a page is renamed so saved links and Google results keep working.',
+        group: 'Admin',
+      },
       // @ts-expect-error - This is a valid override, mapped fields don't resolve to the same type
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
@@ -34,7 +44,8 @@ export const plugins: Plugin[] = [
             return {
               ...field,
               admin: {
-                description: 'You will need to rebuild the website when changing this field.',
+                description:
+                  'The old path, starting with a slash — e.g. /old-page-name. Takes effect within a few minutes.',
               },
             }
           }
@@ -46,10 +57,6 @@ export const plugins: Plugin[] = [
       },
     },
   }),
-  nestedDocsPlugin({
-    collections: ['categories'],
-    generateURL: (docs) => docs.reduce((url, doc) => `${url}/${doc.slug}`, ''),
-  }),
   seoPlugin({
     generateTitle,
     generateURL,
@@ -59,6 +66,14 @@ export const plugins: Plugin[] = [
       payment: false,
     },
     formOverrides: {
+      admin: {
+        group: 'Content',
+      },
+      access: {
+        create: isAdminOrEditor,
+        delete: isAdminOrEditor,
+        update: isAdminOrEditor,
+      },
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
           if ('name' in field && field.name === 'confirmationMessage') {
@@ -79,10 +94,42 @@ export const plugins: Plugin[] = [
         })
       },
     },
+    formSubmissionOverrides: {
+      admin: {
+        defaultColumns: ['form', 'isRead', 'createdAt'],
+        group: 'Inbox',
+      },
+      access: {
+        read: isAdminOrEditor,
+        update: isAdminOrEditor,
+      },
+      fields: ({ defaultFields }) => {
+        return [
+          ...defaultFields,
+          {
+            name: 'isRead',
+            type: 'checkbox',
+            admin: {
+              description: 'Tick once this submission has been dealt with.',
+              position: 'sidebar',
+            },
+            defaultValue: false,
+            label: 'Read',
+          },
+        ]
+      },
+    },
   }),
   searchPlugin({
-    collections: ['posts'],
+    collections: ['news', 'projects', 'events', 'pages', 'faqs'],
     beforeSync: beforeSyncWithSearch,
+    defaultPriorities: {
+      events: 30,
+      faqs: 20,
+      news: 40,
+      pages: 50,
+      projects: 50,
+    },
     searchOverrides: {
       fields: ({ defaultFields }) => {
         return [...defaultFields, ...searchFields]

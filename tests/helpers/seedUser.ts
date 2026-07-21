@@ -3,7 +3,9 @@ import config from '../../src/payload.config.js'
 
 export const testUser = {
   email: 'dev@payloadcms.com',
+  name: 'E2E Test Admin',
   password: 'test',
+  roles: ['admin'] as ('admin' | 'editor' | 'contributor')[],
 }
 
 /**
