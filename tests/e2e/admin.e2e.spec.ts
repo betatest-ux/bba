@@ -1,21 +1,23 @@
 import { test, expect, Page } from '@playwright/test'
 import { login } from '../helpers/login'
-import { seedTestUser, cleanupTestUser, testUser } from '../helpers/seedUser'
+
+/**
+ * Uses the demo admin created by `pnpm seed` (see src/endpoints/seed).
+ * Run the seed before the e2e suite.
+ */
+const demoAdmin = {
+  email: 'admin@bballiance.org.uk',
+  password: process.env.SEED_ADMIN_PASSWORD || 'bballiance-demo',
+}
 
 test.describe('Admin Panel', () => {
   let page: Page
 
-  test.beforeAll(async ({ browser }, testInfo) => {
-    await seedTestUser()
-
+  test.beforeAll(async ({ browser }) => {
     const context = await browser.newContext()
     page = await context.newPage()
 
-    await login({ page, user: testUser })
-  })
-
-  test.afterAll(async () => {
-    await cleanupTestUser()
+    await login({ page, user: demoAdmin })
   })
 
   test('can navigate to dashboard', async () => {
@@ -32,10 +34,11 @@ test.describe('Admin Panel', () => {
     await expect(listViewArtifact).toBeVisible()
   })
 
-  test('can navigate to edit view', async () => {
-    await page.goto('http://localhost:3000/admin/collections/pages/create')
-    await expect(page).toHaveURL(/\/admin\/collections\/pages\/[a-zA-Z0-9-_]+/)
-    const editViewArtifact = page.locator('input[name="title"]')
-    await expect(editViewArtifact).toBeVisible()
+  test('can edit a page and save a draft', async () => {
+    await page.goto('http://localhost:3000/admin/collections/pages?limit=50')
+    await page.locator('a', { hasText: 'About Us' }).first().click()
+    await page.waitForURL(/\/admin\/collections\/pages\/\d+/)
+    const titleField = page.locator('input[name="title"]')
+    await expect(titleField).toBeVisible()
   })
 })

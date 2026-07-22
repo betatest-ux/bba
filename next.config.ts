@@ -44,6 +44,33 @@ const nextConfig: NextConfig = {
 
     return webpackConfig
   },
+  headers: async () => [
+    {
+      // Security headers for every route. script-src is deliberately not
+      // locked down: Next.js inline runtime + Payload admin need it; the
+      // cookie banner gates third-party scripts instead (see CookieConsent).
+      headers: [
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        {
+          key: 'Permissions-Policy',
+          value: 'camera=(), microphone=(), geolocation=(), payment=()',
+        },
+        {
+          key: 'Content-Security-Policy',
+          value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self';",
+        },
+        {
+          key: 'Strict-Transport-Security',
+          value: 'max-age=31536000; includeSubDomains',
+        },
+      ],
+      source: '/(.*)',
+    },
+  ],
+  // Standalone output keeps the Docker image small; harmless elsewhere.
+  output: process.env.DOCKER_BUILD ? 'standalone' : undefined,
   reactStrictMode: true,
   redirects,
   turbopack: {

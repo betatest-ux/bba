@@ -38,6 +38,7 @@ import { EmailSettings } from './globals/EmailSettings'
 import { MaintenanceMode } from './globals/MaintenanceMode'
 import { SEOSettings } from './globals/SEOSettings'
 import { SiteSettings } from './globals/SiteSettings'
+import { exportEndpoints } from './endpoints/exports'
 import { withActivityLog, withGlobalActivityLog } from './hooks/activityLog'
 import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
@@ -143,6 +144,7 @@ export default buildConfig({
   ],
   cors: [getServerSideURL()].filter(Boolean),
   email: emailAdapter,
+  endpoints: [...exportEndpoints],
   globals: [
     withGlobalActivityLog(Header),
     withGlobalActivityLog(Footer),

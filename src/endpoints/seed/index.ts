@@ -694,7 +694,7 @@ export const seed = async ({
       data: {
         title,
         slug,
-        hero: { type: 'lowImpact', richText: rt(`## ${title}`, 'Template text for the charity to review — this is a starting point, not legal advice. [PLACEHOLDER — review before launch]') },
+        hero: { type: 'lowImpact', richText: rt(`# ${title}`, 'Template text for the charity to review — this is a starting point, not legal advice. [PLACEHOLDER — review before launch]') },
         layout: [
           {
             blockType: 'content',
@@ -717,6 +717,39 @@ export const seed = async ({
       },
     })
 
+  // Editable 404 wording (used by the not-found page).
+  await payload.create({
+    collection: 'pages',
+    context,
+    depth: 0,
+    data: {
+      title: 'Page Not Found (404 wording)',
+      slug: 'page-not-found',
+      hero: {
+        type: 'lowImpact',
+        richText: rt(
+          '# Well, this street doesn’t exist',
+          'The page you’re after may have moved or been renamed. Try the menu, or head back home.',
+        ),
+      },
+      layout: [
+        {
+          blockType: 'content',
+          columns: [
+            {
+              size: 'full',
+              richText: rt(
+                'This page’s heading and text appear on the site’s “404 — page not found” screen. Edit the Hero section above to change the wording.',
+              ),
+            },
+          ],
+        },
+      ],
+      meta: { description: 'Page not found.' },
+      _status: 'published',
+    },
+  })
+
   await policyPage('Privacy Policy', 'privacy-policy', 'How BBAlliance collects, uses and protects personal information, in line with UK GDPR.')
   await policyPage('Cookie Policy', 'cookie-policy', 'What cookies this website uses and how you can control them.')
   await policyPage('Safeguarding Statement', 'safeguarding', 'BBAlliance is committed to keeping children and vulnerable adults safe in everything we do.')
@@ -734,7 +767,7 @@ export const seed = async ({
         type: 'mediumImpact',
         media: aboutImg,
         richText: rt(
-          '## Rooted in Blackburn and Darwen',
+          '# Rooted in Blackburn and Darwen',
           'BBAlliance began around one kitchen table in [PLACEHOLDER year] with a simple idea: neighbours looking after neighbours.',
         ),
       },
@@ -808,7 +841,7 @@ export const seed = async ({
       slug: 'trustees-and-staff',
       hero: {
         type: 'lowImpact',
-        richText: rt('## The people behind BBAlliance', 'Trustees who steer us, staff who run things day to day, and volunteers who make it all happen.'),
+        richText: rt('# The people behind BBAlliance', 'Trustees who steer us, staff who run things day to day, and volunteers who make it all happen.'),
       },
       layout: [
         {
@@ -837,7 +870,7 @@ export const seed = async ({
         type: 'highImpact',
         media: heroImg,
         richText: rt(
-          '## Stronger together in Blackburn and Darwen',
+          '# Stronger together in Blackburn and Darwen',
           'We’re your neighbours — running youth clubs, a food pantry, elders’ groups and more, right here in the borough and beyond.',
         ),
         links: [

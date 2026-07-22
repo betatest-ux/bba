@@ -94,6 +94,12 @@ const BeforeDashboard: React.FC<ServerProps> = async (props) => {
               {unreadApplications.totalDocs === 1 ? '' : 's'}
             </a>
           </p>
+          <p>
+            <small>
+              Export CSV: <a href="/api/export/submissions">submissions</a> ·{' '}
+              <a href="/api/export/subscribers">newsletter subscribers</a>
+            </small>
+          </p>
         </div>
 
         <div className={`${baseClass}__card`}>

@@ -7,6 +7,7 @@ import type { Footer as FooterType } from '@/payload-types'
 import { ThemeSelector } from '@/providers/Theme/ThemeSelector'
 import { CMSLink } from '@/components/Link'
 import { Logo } from '@/components/Logo/Logo'
+import { NewsletterSignup } from '@/components/NewsletterSignup'
 import { SocialIcon, type SocialPlatform } from '@/components/SocialIcon'
 import { Weave } from '@/components/Weave'
 
@@ -95,6 +96,16 @@ export async function Footer() {
             )}
           </div>
         </div>
+
+        {/* Newsletter */}
+        {footerData?.newsletterEnabled && (
+          <div className="mt-12 max-w-md">
+            <h2 className="font-display text-sm uppercase tracking-wider text-white/60 mb-3">
+              {footerData?.newsletterHeading || 'Stay in the loop'}
+            </h2>
+            <NewsletterSignup variant="footer" />
+          </div>
+        )}
 
         {/* Legal line */}
         <div className="mt-12 border-t border-white/15 pt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between text-sm text-white/70">

@@ -9,7 +9,10 @@ import React, { cache } from 'react'
 import RichText from '@/components/RichText'
 
 import { NewsHero } from '@/heros/NewsHero'
+import { ShareLinks } from '@/components/ShareLinks'
 import { generateMeta } from '@/utilities/generateMeta'
+import { getServerSideURL } from '@/utilities/getURL'
+import { readingTime } from '@/utilities/readingTime'
 import PageClient from './page.client'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 
@@ -49,8 +52,31 @@ export default async function NewsArticle({ params: paramsPromise }: Args) {
 
   if (!article) return <PayloadRedirects url={url} />
 
+  const absoluteUrl = `${getServerSideURL()}${url}`
+  const minutes = readingTime(article.content)
+
+  const articleJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article.title,
+    ...(article.publishedAt ? { datePublished: article.publishedAt } : {}),
+    dateModified: article.updatedAt,
+    ...(Array.isArray(article.authors) && article.authors.length > 0
+      ? {
+          author: article.authors
+            .filter((author) => typeof author === 'object' && author !== null)
+            .map((author) => ({ '@type': 'Person', name: (author as { name: string }).name })),
+        }
+      : {}),
+    ...(article.heroImage && typeof article.heroImage === 'object' && article.heroImage.url
+      ? { image: `${getServerSideURL()}${article.heroImage.url}` }
+      : {}),
+    mainEntityOfPage: absoluteUrl,
+    publisher: { '@type': 'Organization', name: 'BBAlliance' },
+  }
+
   return (
-    <article className="pt-16 pb-16">
+    <article className="pt-0 pb-16">
       <PageClient />
 
       {/* Allows redirects for valid pages too */}
@@ -58,11 +84,26 @@ export default async function NewsArticle({ params: paramsPromise }: Args) {
 
       {draft && <LivePreviewListener />}
 
+      <script
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+        type="application/ld+json"
+      />
+
       <NewsHero article={article} />
 
       <div className="flex flex-col items-center gap-4 pt-8">
         <div className="container">
-          <RichText className="max-w-[48rem] mx-auto" data={article.content} enableGutter={false} />
+          <p className="mx-auto max-w-[48rem] text-sm text-muted-foreground">
+            {minutes} min read
+          </p>
+          <RichText
+            className="max-w-[48rem] mx-auto mt-4"
+            data={article.content}
+            enableGutter={false}
+          />
+          <div className="mx-auto mt-10 max-w-[48rem]">
+            <ShareLinks title={article.title} url={absoluteUrl} />
+          </div>
           {article.relatedNews && article.relatedNews.length > 0 && (
             <RelatedNews
               className="mt-12 max-w-[52rem] lg:grid lg:grid-cols-subgrid col-start-1 col-span-3 grid-rows-[2fr]"

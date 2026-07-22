@@ -26,6 +26,24 @@ export const Users: CollectionConfig = {
     lockTime: 10 * 60 * 1000,
     maxLoginAttempts: 5,
   },
+  hooks: {
+    beforeValidate: [
+      ({ data, operation }) => {
+        // Sensible password policy: 10+ characters, not a known-terrible one.
+        const password = data?.password
+        if ((operation === 'create' || operation === 'update') && typeof password === 'string') {
+          if (password.length < 10) {
+            throw new Error('Passwords must be at least 10 characters — a short phrase works well.')
+          }
+          const banned = ['password', '1234567890', 'qwertyuiop', 'bballiance']
+          if (banned.includes(password.toLowerCase())) {
+            throw new Error('That password is too easy to guess — pick something more unusual.')
+          }
+        }
+        return data
+      },
+    ],
+  },
   fields: [
     {
       name: 'name',

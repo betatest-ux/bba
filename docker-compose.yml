@@ -1,31 +1,55 @@
-version: '3'
+# Production-style stack for the VPS route: the site (Next.js + Payload in
+# one container) plus Postgres. See README.md → Deployment → VPS.
+#
+#   docker compose up -d --build
+#
+# First run: docker compose exec app node --import tsx/esm -r dotenv/config src/scripts/seed.ts
 
 services:
-  payload:
-    image: node:18-alpine
+  app:
+    build: .
     ports:
       - '3000:3000'
+    environment:
+      DATABASE_URI: postgres://bba:${POSTGRES_PASSWORD:-change-me}@db:5432/bballiance
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET:?set PAYLOAD_SECRET in .env}
+      NEXT_PUBLIC_SERVER_URL: ${NEXT_PUBLIC_SERVER_URL:-http://localhost:3000}
+      CRON_SECRET: ${CRON_SECRET:-}
+      PREVIEW_SECRET: ${PREVIEW_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@bballiance.org.uk}
+      EMAIL_FROM_NAME: ${EMAIL_FROM_NAME:-BBAlliance}
     volumes:
-      - .:/home/node/app
-      - node_modules:/home/node/app/node_modules
-    working_dir: /home/node/app/
-    command: sh -c "yarn install && yarn dev"
+      # Uploaded files live outside the container so deploys never lose them.
+      - media:/app/public/media
+      - documents:/app/public/documents
+      - private_uploads:/app/private-uploads
     depends_on:
-      - mongo
-    env_file:
-      - .env
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
-  mongo:
-    image: mongo:latest
-    ports:
-      - '27017:27017'
-    command:
-      - --storageEngine=wiredTiger
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: bballiance
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_USER: bba
+    healthcheck:
+      interval: 5s
+      retries: 10
+      test: ['CMD-SHELL', 'pg_isready -U bba -d bballiance']
+      timeout: 5s
     volumes:
-      - data:/data/db
-    logging:
-      driver: none
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
 
 volumes:
-  data:
-  node_modules:
+  documents:
+  media:
+  pgdata:
+  private_uploads:

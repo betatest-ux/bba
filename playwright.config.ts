@@ -1,10 +1,19 @@
 import { defineConfig, devices } from '@playwright/test'
+import fs from 'fs'
 
 /**
  * Read environment variables from file.
  * https://github.com/motdotla/dotenv
  */
 import 'dotenv/config'
+
+/**
+ * Some CI/sandbox images pre-install a Chromium at a fixed path instead of the
+ * revision this Playwright version pins. Use it when present; otherwise the
+ * normal `playwright install` browser is used.
+ */
+const preinstalledChromium = '/opt/pw-browsers/chromium'
+const executablePath = fs.existsSync(preinstalledChromium) ? preinstalledChromium : undefined
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -30,7 +39,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'], channel: 'chromium' },
+      use: {
+        ...devices['Desktop Chrome'],
+        ...(executablePath ? { launchOptions: { executablePath } } : { channel: 'chromium' }),
+      },
     },
   ],
   webServer: {

@@ -23,30 +23,28 @@ export const StatRowBlock: React.FC<StatRowBlockProps> = ({ background, heading,
             <h2 className="text-h2 mb-10 text-center">{heading}</h2>
           </Reveal>
         )}
-        <dl
+        <ul
           className={cn(
-            'grid gap-8 text-center',
+            'grid gap-8 text-center list-none p-0',
             (stats?.length ?? 0) >= 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3',
           )}
         >
           {(stats || []).map((stat, index) => (
-            <Reveal delay={index * 0.06} key={stat.id ?? index}>
-              <div>
-                <dd
-                  className={cn(
-                    'font-display text-4xl md:text-5xl font-bold',
-                    isDark ? 'text-gold' : 'text-brand',
-                  )}
-                >
-                  <CountUp prefix={stat.prefix} suffix={stat.suffix} value={stat.value} />
-                </dd>
-                <dt className={cn('mt-2 text-base', isDark ? 'text-white/80' : 'text-muted-foreground')}>
-                  {stat.label}
-                </dt>
-              </div>
+            <Reveal as="li" delay={index * 0.06} key={stat.id ?? index}>
+              <p
+                className={cn(
+                  'font-display text-4xl md:text-5xl font-bold',
+                  isDark ? 'text-gold' : 'text-brand',
+                )}
+              >
+                <CountUp prefix={stat.prefix} suffix={stat.suffix} value={stat.value} />
+              </p>
+              <p className={cn('mt-2 text-base', isDark ? 'text-white/80' : 'text-muted-foreground')}>
+                {stat.label}
+              </p>
             </Reveal>
           ))}
-        </dl>
+        </ul>
       </div>
     </section>
   )

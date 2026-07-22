@@ -28,7 +28,7 @@ export const paragraph = (value: string): LexicalNode => ({
   version: 1,
 })
 
-export const heading = (value: string, tag: 'h2' | 'h3' | 'h4' = 'h2'): LexicalNode => ({
+export const heading = (value: string, tag: 'h1' | 'h2' | 'h3' | 'h4' = 'h2'): LexicalNode => ({
   type: 'heading',
   children: [text(value)],
   direction: 'ltr',
@@ -50,6 +50,7 @@ export const rt = (...blocks: (string | LexicalNode)[]): any => ({
       if (typeof block !== 'string') return block
       if (block.startsWith('### ')) return heading(block.slice(4), 'h3')
       if (block.startsWith('## ')) return heading(block.slice(3), 'h2')
+      if (block.startsWith('# ')) return heading(block.slice(2), 'h1')
       return paragraph(block)
     }),
     direction: 'ltr',

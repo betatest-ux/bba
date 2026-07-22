@@ -139,18 +139,16 @@ export default async function ProjectPage({ params: paramsPromise }: Args) {
       {project.impactStats && project.impactStats.length > 0 && (
         <section aria-label="Impact" className="border-b border-border bg-secondary">
           <div className="container py-10">
-            <dl className="grid grid-cols-2 gap-8 text-center md:grid-cols-4">
+            <ul className="grid grid-cols-2 gap-8 text-center md:grid-cols-4 list-none p-0">
               {project.impactStats.map((stat, index) => (
-                <Reveal delay={index * 0.06} key={stat.id ?? index}>
-                  <div>
-                    <dd className="font-display text-4xl font-bold text-brand">
-                      <CountUp prefix={stat.prefix} suffix={stat.suffix} value={stat.value} />
-                    </dd>
-                    <dt className="mt-1 text-sm text-muted-foreground">{stat.label}</dt>
-                  </div>
+                <Reveal as="li" delay={index * 0.06} key={stat.id ?? index}>
+                  <p className="font-display text-4xl font-bold text-brand">
+                    <CountUp prefix={stat.prefix} suffix={stat.suffix} value={stat.value} />
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
                 </Reveal>
               ))}
-            </dl>
+            </ul>
           </div>
         </section>
       )}
