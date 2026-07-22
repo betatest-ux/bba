@@ -102,10 +102,27 @@ src/
 5. Run the seed once against the production database if you want the starter content:
    `DATABASE_URI=postgres://… pnpm seed`
 
-> Note on uploads: on Vercel the filesystem is ephemeral. For production use, add a
-> Payload storage adapter (e.g. `@payloadcms/storage-vercel-blob` or S3) for the
-> `media`, `documents` and `cv-uploads` collections — a small, well-documented change in
-> `payload.config.ts`. The VPS route below needs no such change.
+> **Uploads on Vercel** (ephemeral filesystem): object storage is already wired in —
+> set the four `S3_*` env vars and every upload collection (media, documents, CVs)
+> switches to the bucket automatically. Cloudflare R2's free tier (10GB, zero egress
+> fees) is the cheapest option:
+>
+> 1. Cloudflare dashboard → R2 → Create bucket (e.g. `bballiance-uploads`).
+> 2. R2 → Manage API Tokens → create a token scoped to that bucket with
+>    *Object Read & Write*.
+> 3. Set in Vercel: `S3_BUCKET`, `S3_ENDPOINT`
+>    (`https://<account-id>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY_ID`,
+>    `S3_SECRET_ACCESS_KEY` (leave `S3_REGION` as `auto`).
+>
+> Files are served through Payload's API, so CV uploads keep their admin-only access
+> control. The VPS route needs none of this — leave the `S3_*` vars unset and files
+> stay on disk.
+>
+> **Scheduled publishing on Vercel Hobby**: the free plan's cron is daily-only. For
+> minute-level scheduling, add a free Cloudflare Worker with a `*/5 * * * *` cron
+> trigger that fetches `https://bballiance.org.uk/api/payload-jobs/run` with the
+> header `Authorization: Bearer <CRON_SECRET>` — ready-to-paste code and setup steps
+> are in [`deploy/cloudflare-scheduler-worker.js`](./deploy/cloudflare-scheduler-worker.js).
 
 ### Path B — VPS with Docker
 

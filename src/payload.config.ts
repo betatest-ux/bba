@@ -2,6 +2,7 @@ import { postgresAdapter } from '@payloadcms/db-postgres'
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import { resendAdapter } from '@payloadcms/email-resend'
+import { s3Storage } from '@payloadcms/storage-s3'
 import sharp from 'sharp'
 import path from 'path'
 import { buildConfig, PayloadRequest } from 'payload'
@@ -171,7 +172,35 @@ export default buildConfig({
       { code: 'ur', label: 'اردو (Urdu)', rtl: true },
     ],
   },
-  plugins,
+  plugins: [
+    ...plugins,
+    // Object storage (Cloudflare R2 or any S3-compatible service). Enabled
+    // only when S3_BUCKET is set — required on hosts without a persistent
+    // disk (Vercel). Local dev and the Docker/VPS route keep the filesystem.
+    // CVs stay access-controlled: files are streamed through Payload's API
+    // (admin/editor read) rather than getting public URLs.
+    ...(process.env.S3_BUCKET
+      ? [
+          s3Storage({
+            bucket: process.env.S3_BUCKET,
+            collections: {
+              'cv-uploads': { prefix: 'cvs' },
+              'library-documents': { prefix: 'documents' },
+              media: { prefix: 'media' },
+            },
+            config: {
+              credentials: {
+                accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+                secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+              },
+              endpoint: process.env.S3_ENDPOINT,
+              forcePathStyle: true,
+              region: process.env.S3_REGION || 'auto',
+            },
+          }),
+        ]
+      : []),
+  ],
   secret: process.env.PAYLOAD_SECRET,
   sharp,
   typescript: {
