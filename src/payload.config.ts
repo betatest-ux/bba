@@ -3,6 +3,7 @@ import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import { resendAdapter } from '@payloadcms/email-resend'
 import { s3Storage } from '@payloadcms/storage-s3'
+import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
 import sharp from 'sharp'
 import path from 'path'
 import { buildConfig, PayloadRequest } from 'payload'
@@ -174,12 +175,26 @@ export default buildConfig({
   },
   plugins: [
     ...plugins,
-    // Object storage (Cloudflare R2 or any S3-compatible service). Enabled
-    // only when S3_BUCKET is set — required on hosts without a persistent
-    // disk (Vercel). Local dev and the Docker/VPS route keep the filesystem.
-    // CVs stay access-controlled: files are streamed through Payload's API
-    // (admin/editor read) rather than getting public URLs.
-    ...(process.env.S3_BUCKET
+    // Upload storage — picked automatically from environment, cheapest first:
+    //  1. Vercel Blob (BLOB_READ_WRITE_TOKEN set): zero-config on Vercel,
+    //     included in the free Hobby plan, no separate vendor or card.
+    //  2. S3-compatible bucket (S3_BUCKET set): Cloudflare R2, AWS S3, etc.
+    //  3. Neither: plain filesystem (local dev and the Docker/VPS route).
+    // In all cases CVs stay access-controlled: files stream through
+    // Payload's API (admin/editor read) rather than getting public URLs.
+    ...(process.env.BLOB_READ_WRITE_TOKEN
+      ? [
+          vercelBlobStorage({
+            collections: {
+              'cv-uploads': { prefix: 'cvs' },
+              'library-documents': { prefix: 'documents' },
+              media: { prefix: 'media' },
+            },
+            token: process.env.BLOB_READ_WRITE_TOKEN,
+          }),
+        ]
+      : []),
+    ...(!process.env.BLOB_READ_WRITE_TOKEN && process.env.S3_BUCKET
       ? [
           s3Storage({
             bucket: process.env.S3_BUCKET,

@@ -102,21 +102,21 @@ src/
 5. Run the seed once against the production database if you want the starter content:
    `DATABASE_URI=postgres://… pnpm seed`
 
-> **Uploads on Vercel** (ephemeral filesystem): object storage is already wired in —
-> set the four `S3_*` env vars and every upload collection (media, documents, CVs)
-> switches to the bucket automatically. Cloudflare R2's free tier (10GB, zero egress
-> fees) is the cheapest option:
+> **Uploads on Vercel** (ephemeral filesystem): storage adapters are already wired
+> in and pick themselves from the environment.
 >
-> 1. Cloudflare dashboard → R2 → Create bucket (e.g. `bballiance-uploads`).
-> 2. R2 → Manage API Tokens → create a token scoped to that bucket with
->    *Object Read & Write*.
-> 3. Set in Vercel: `S3_BUCKET`, `S3_ENDPOINT`
->    (`https://<account-id>.r2.cloudflarestorage.com`), `S3_ACCESS_KEY_ID`,
->    `S3_SECRET_ACCESS_KEY` (leave `S3_REGION` as `auto`).
+> **Recommended — Vercel Blob** (no extra vendor, included in the free Hobby plan,
+> which has no overage billing): in Vercel go to **Storage → Create Database →
+> Blob**, then connect it to the project. Vercel injects `BLOB_READ_WRITE_TOKEN`
+> automatically and every upload collection (media, documents, CVs) switches to the
+> Blob store on the next deploy. Nothing to configure by hand.
 >
-> Files are served through Payload's API, so CV uploads keep their admin-only access
-> control. The VPS route needs none of this — leave the `S3_*` vars unset and files
-> stay on disk.
+> **Alternative — any S3-compatible bucket** (Cloudflare R2, AWS S3): set the four
+> `S3_*` env vars documented in `.env.example`. Used only when no Blob token exists.
+>
+> Either way files are served through Payload's API, so CV uploads keep their
+> admin-only access control. The VPS route needs none of this — leave both unset
+> and files stay on disk.
 >
 > **Scheduled publishing on Vercel Hobby**: the free plan's cron is daily-only. For
 > minute-level scheduling, add a free Cloudflare Worker with a `*/5 * * * *` cron
