@@ -1,5 +1,8 @@
 import type { CollectionSlug, Payload, PayloadRequest } from 'payload'
 
+import fs from 'fs/promises'
+import path from 'path'
+
 import { daysFromNow, makePlaceholderImage, makePlaceholderPDF, rt } from './helpers'
 import { seedStageList, type SeedStageKey } from './stages'
 
@@ -121,7 +124,7 @@ const stageReset = async ({ context, payload }: StageArgs): Promise<void> => {
 /* Stages: images — placeholder imagery, split to stay inside limits    */
 /* ------------------------------------------------------------------ */
 
-const imageDefs: Record<
+export const imageDefs: Record<
   string,
   [label: string, width: number, height: number, tone: Parameters<typeof makePlaceholderImage>[3]]
 > = {
@@ -176,20 +179,59 @@ const imageBatches: Record<'images-1' | 'images-2', string[]> = {
   ],
 }
 
+/**
+ * Loads a placeholder image. The webp files are pre-generated (committed under
+ * ./assets, regenerate with `pnpm generate:placeholders`) because rendering
+ * the SVG *text* at runtime needs system fonts, and serverless containers
+ * (Vercel) have none — sharp can abort the whole process there. Reading a
+ * finished file needs neither fonts nor image work.
+ */
+const loadPlaceholderImage = async (
+  key: string,
+  payload: Payload,
+): Promise<Awaited<ReturnType<typeof makePlaceholderImage>>> => {
+  const [label, width, height, tone] = imageDefs[key]
+  const assetPath = path.resolve(process.cwd(), 'src/endpoints/seed/assets', `${key}.webp`)
+  try {
+    const data = await fs.readFile(assetPath)
+    return {
+      name: `${label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')}.webp`,
+      data,
+      mimetype: 'image/webp',
+      size: data.byteLength,
+    }
+  } catch {
+    payload.logger.warn(
+      `Pre-generated placeholder "${key}.webp" not found — rendering at runtime (needs system fonts).`,
+    )
+    return makePlaceholderImage(label, width, height, tone)
+  }
+}
+
 const makeImageStage =
   (batch: 'images-1' | 'images-2') =>
   async ({ context, payload, state }: StageArgs): Promise<void> => {
-    payload.logger.info(`— Generating placeholder imagery (${batch})…`)
+    payload.logger.info(`— Creating placeholder imagery (${batch})…`)
     for (const key of imageBatches[batch]) {
-      const [label, width, height, tone] = imageDefs[key]
-      const file = await makePlaceholderImage(label, width, height, tone)
-      const doc = await payload.create({
-        collection: 'media',
-        context,
-        data: { alt: `${label} [PLACEHOLDER — replace with a real photo]` },
-        file,
-      })
-      state.images[key] = doc.id as number
+      const [label] = imageDefs[key]
+      try {
+        const file = await loadPlaceholderImage(key, payload)
+        const doc = await payload.create({
+          collection: 'media',
+          context,
+          data: { alt: `${label} [PLACEHOLDER — replace with a real photo]` },
+          file,
+        })
+        state.images[key] = doc.id as number
+      } catch (error) {
+        // Name the culprit — "creating image X failed: <why>" beats a bare 500.
+        throw new Error(
+          `Creating placeholder image "${label}" failed: ${(error as Error).message}`,
+        )
+      }
     }
   }
 

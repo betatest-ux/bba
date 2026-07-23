@@ -56,7 +56,9 @@ export const SeedButton: React.FC = () => {
 
           if (!res.ok) {
             const detail =
-              (json && typeof json.error === 'string' && json.error) || `HTTP ${res.status}`
+              (json && typeof json.error === 'string' && json.error) ||
+              `HTTP ${res.status} with no error details — the server likely crashed or timed ` +
+                `out; the Vercel function logs (project → Logs) will have the specifics`
             throw new Error(`failed at “${stage.label}” — ${detail}`)
           }
 

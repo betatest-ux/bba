@@ -69,6 +69,11 @@ const nextConfig: NextConfig = {
       source: '/(.*)',
     },
   ],
+  // The seed route uploads pre-generated placeholder images from disk — make
+  // sure they're bundled into its serverless function on Vercel.
+  outputFileTracingIncludes: {
+    '/next/seed': ['./src/endpoints/seed/assets/**/*'],
+  },
   // Standalone output keeps the Docker image small; harmless elsewhere.
   output: process.env.DOCKER_BUILD ? 'standalone' : undefined,
   reactStrictMode: true,
