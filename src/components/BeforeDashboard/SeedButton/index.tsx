@@ -3,6 +3,8 @@
 import React, { Fragment, useCallback, useState } from 'react'
 import { toast } from '@payloadcms/ui'
 
+import { seedStageList } from '@/endpoints/seed/stages'
+
 import './index.scss'
 
 const SuccessMessage: React.FC = () => (
@@ -17,7 +19,6 @@ const SuccessMessage: React.FC = () => (
 export const SeedButton: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [seeded, setSeeded] = useState(false)
-  const [error, setError] = useState<null | string>(null)
 
   const handleClick = useCallback(
     async (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -31,55 +32,59 @@ export const SeedButton: React.FC = () => {
         toast.info('Seeding already in progress.')
         return
       }
-      if (error) {
-        toast.error(`An error occurred, please refresh and try again.`)
-        return
-      }
 
       setLoading(true)
+      const toastId = toast.loading('Seeding with data…')
 
       try {
-        toast.promise(
-          new Promise((resolve, reject) => {
-            try {
-              fetch('/next/seed', { method: 'POST', credentials: 'include' })
-                .then((res) => {
-                  if (res.ok) {
-                    resolve(true)
-                    setSeeded(true)
-                  } else {
-                    reject('An error occurred while seeding.')
-                  }
-                })
-                .catch((error) => {
-                  reject(error)
-                })
-            } catch (error) {
-              reject(error)
-            }
-          }),
-          {
-            loading: 'Seeding with data....',
-            success: <SuccessMessage />,
-            error: 'An error occurred while seeding.',
-          },
-        )
+        // One request per stage: a single request doing everything would hit
+        // serverless time limits (Vercel kills long-running functions).
+        let state: unknown = null
+        for (let i = 0; i < seedStageList.length; i++) {
+          const stage = seedStageList[i]
+          toast.loading(`Seeding ${i + 1}/${seedStageList.length}: ${stage.label}…`, {
+            id: toastId,
+          })
+
+          const res = await fetch('/next/seed', {
+            body: JSON.stringify({ stage: stage.key, state }),
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+          })
+          const json = await res.json().catch(() => null)
+
+          if (!res.ok) {
+            const detail =
+              (json && typeof json.error === 'string' && json.error) || `HTTP ${res.status}`
+            throw new Error(`failed at “${stage.label}” — ${detail}`)
+          }
+
+          state = json?.state ?? state
+        }
+
+        setSeeded(true)
+        toast.success(<SuccessMessage />, { duration: 10000, id: toastId })
       } catch (err) {
-        const error = err instanceof Error ? err.message : String(err)
-        setError(error)
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`Seeding ${message}. It is safe to click the button to try again.`, {
+          duration: 20000,
+          id: toastId,
+        })
+      } finally {
+        setLoading(false)
       }
     },
-    [loading, seeded, error],
+    [loading, seeded],
   )
 
   let message = ''
-  if (loading) message = ' (seeding...)'
+  if (loading) message = ' (seeding…)'
   if (seeded) message = ' (done!)'
-  if (error) message = ` (error: ${error})`
 
   return (
     <Fragment>
-      <button className="seedButton" onClick={handleClick}>
+      <button className="seedButton" disabled={loading} onClick={handleClick}>
         Seed your database
       </button>
       {message}

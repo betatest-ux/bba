@@ -200,6 +200,12 @@ pnpm test       # both
 
 ## Troubleshooting
 
+- **Seeding from the admin dashboard fails**: the Seed button runs in seven small
+  stages (one request each) so a single request never hits serverless time limits,
+  and the toast reports the failing stage with the real error message. It is always
+  safe to click the button again — the first stage clears partial content. If a
+  stage still times out on Vercel, enable **Fluid Compute** (Project → Settings →
+  Functions) and redeploy: it raises the Hobby-plan time limit from 60s to 300s.
 - **`payload run` exits silently** in some sandboxed/non-TTY environments — this is why
   `pnpm seed`/`pnpm backup` invoke `node --import tsx/esm` directly. Use the pnpm scripts.
 - **"Error hitting revalidate route" warnings during `pnpm seed`** are normal when the

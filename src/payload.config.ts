@@ -185,6 +185,10 @@ export default buildConfig({
     ...(process.env.BLOB_READ_WRITE_TOKEN
       ? [
           vercelBlobStorage({
+            // Blob refuses to overwrite an existing pathname, so a re-seed (or
+            // any re-upload racing a stale file) would fail with "blob already
+            // exists" without the random suffix.
+            addRandomSuffix: true,
             // Vercel serverless rejects request bodies over ~4.5 MB; client
             // uploads send files browser → Blob store directly, so admins can
             // upload full-size photos. Token minting requires a logged-in user.

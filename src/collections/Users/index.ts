@@ -28,6 +28,18 @@ export const Users: CollectionConfig = {
   },
   hooks: {
     beforeValidate: [
+      // The very first account (created through /admin/create-first-user) must
+      // be an admin, whatever the form said — otherwise the site starts with
+      // nobody able to manage users, settings or seeding.
+      async ({ data, operation, req }) => {
+        if (operation === 'create' && data) {
+          const { totalDocs } = await req.payload.count({ collection: 'users' })
+          if (totalDocs === 0) {
+            return { ...data, roles: ['admin'] }
+          }
+        }
+        return data
+      },
       ({ data, operation }) => {
         // Sensible password policy: 10+ characters, not a known-terrible one.
         const password = data?.password
@@ -55,8 +67,10 @@ export const Users: CollectionConfig = {
       type: 'select',
       access: {
         // Only admins may grant or change roles — otherwise anyone could
-        // promote themselves.
-        create: isAdminFieldLevel,
+        // promote themselves. The userless case is create-first-user (the only
+        // unauthenticated path that can create a user), where the hook above
+        // forces the admin role.
+        create: ({ req }) => !req.user || isAdminFieldLevel({ req }),
         update: isAdminFieldLevel,
       },
       admin: {

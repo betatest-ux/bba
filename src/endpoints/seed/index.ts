@@ -1,6 +1,7 @@
-import type { CollectionSlug, GlobalSlug, Payload, PayloadRequest } from 'payload'
+import type { CollectionSlug, Payload, PayloadRequest } from 'payload'
 
 import { daysFromNow, makePlaceholderImage, makePlaceholderPDF, rt } from './helpers'
+import { seedStageList, type SeedStageKey } from './stages'
 
 const collectionsToClear: CollectionSlug[] = [
   'search',
@@ -27,21 +28,45 @@ const collectionsToClear: CollectionSlug[] = [
   'media',
 ]
 
-// Next.js revalidation errors are normal when seeding the database without a
-// server running (e.g. `pnpm seed`) — they can be safely ignored.
-export const seed = async ({
-  payload,
-  req,
-}: {
-  payload: Payload
-  req: PayloadRequest
-}): Promise<void> => {
-  const context = { disableRevalidate: true }
-  payload.logger.info('Seeding BBAlliance demo content…')
+/**
+ * State threaded between seed stages. Serverless functions keep nothing in
+ * memory between requests, so when the admin panel drives the seed one stage
+ * per request, the IDs created so far travel with the client and come back
+ * with the next stage request.
+ */
+export type SeedState = {
+  images: Record<string, number>
+  projectCategories: Record<string, number>
+  newsCategories: Record<string, number>
+  personIds: number[]
+  partnerIds: number[]
+  winterAppealId: number | null
+  aboutPageId: number | null
+  trusteesPageId: number | null
+}
 
-  /* ---------------------------------------------------------------- */
-  /* Clear existing content                                            */
-  /* ---------------------------------------------------------------- */
+export const emptySeedState = (): SeedState => ({
+  images: {},
+  projectCategories: {},
+  newsCategories: {},
+  personIds: [],
+  partnerIds: [],
+  winterAppealId: null,
+  aboutPageId: null,
+  trusteesPageId: null,
+})
+
+type StageArgs = {
+  context: Record<string, unknown>
+  payload: Payload
+  state: SeedState
+}
+
+/* ------------------------------------------------------------------ */
+/* Stage: reset — clear content, ensure demo users                      */
+/* ------------------------------------------------------------------ */
+
+const stageReset = async ({ context, payload }: StageArgs): Promise<void> => {
   payload.logger.info('— Clearing collections…')
   for (const collection of collectionsToClear) {
     try {
@@ -56,9 +81,6 @@ export const seed = async ({
     }
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Users (upsert — never duplicate)                                   */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Ensuring demo users…')
   const demoUsers = [
     {
@@ -93,47 +115,90 @@ export const seed = async ({
       })
     }
   }
+}
 
-  /* ---------------------------------------------------------------- */
-  /* Media placeholders                                                 */
-  /* ---------------------------------------------------------------- */
-  payload.logger.info('— Generating placeholder imagery…')
-  const image = async (label: string, w: number, h: number, tone?: Parameters<typeof makePlaceholderImage>[3]) => {
-    const file = await makePlaceholderImage(label, w, h, tone)
-    const doc = await payload.create({
-      collection: 'media',
-      context,
-      data: { alt: `${label} [PLACEHOLDER — replace with a real photo]` },
-      file,
-    })
-    return doc.id
+/* ------------------------------------------------------------------ */
+/* Stages: images — placeholder imagery, split to stay inside limits    */
+/* ------------------------------------------------------------------ */
+
+const imageDefs: Record<
+  string,
+  [label: string, width: number, height: number, tone: Parameters<typeof makePlaceholderImage>[3]]
+> = {
+  hero: ['Community day on Blackburn Boulevard', 1920, 1080, 'loom'],
+  youth: ['Youth club five-a-side', 1200, 800, 'brick'],
+  food: ['Food pantry volunteers', 1200, 800, 'moor'],
+  elder: ['Elders tea afternoon', 1200, 800, 'gold'],
+  education: ['Homework club', 1200, 800, 'loom'],
+  environment: ['Corporation Park clean-up', 1200, 800, 'moor'],
+  international: ['Water project, Sylhet', 1200, 800, 'brick'],
+  about: ['Darwen Tower at dusk', 1200, 900, 'loom'],
+  appeal: ['Winter warmth appeal', 1200, 800, 'brick'],
+  event1: ['Community iftar', 1200, 800, 'gold'],
+  event2: ['Family fun day', 1200, 800, 'moor'],
+  event3: ['Charity walk to Darwen Tower', 1200, 800, 'loom'],
+  news1: ['New minibus arrival', 1200, 800, 'brick'],
+  news2: ['Volunteer awards night', 1200, 800, 'loom'],
+  news3: ['Pantry milestone', 1200, 800, 'moor'],
+  person: ['Team member portrait', 800, 1000, 'cotton'],
+  partnerCouncil: ['Partner logo — council', 400, 200, 'cotton'],
+  partnerFoundation: ['Partner logo — foundation', 400, 200, 'cotton'],
+  partnerHousing: ['Partner logo — housing', 400, 200, 'cotton'],
+  partnerCollege: ['Partner logo — college', 400, 200, 'cotton'],
+  og: ['BBAlliance — stronger together', 1200, 630, 'loom'],
+}
+
+const imageBatches: Record<'images-1' | 'images-2', string[]> = {
+  'images-1': [
+    'hero',
+    'youth',
+    'food',
+    'elder',
+    'education',
+    'environment',
+    'international',
+    'about',
+    'appeal',
+    'event1',
+  ],
+  'images-2': [
+    'event2',
+    'event3',
+    'news1',
+    'news2',
+    'news3',
+    'person',
+    'partnerCouncil',
+    'partnerFoundation',
+    'partnerHousing',
+    'partnerCollege',
+    'og',
+  ],
+}
+
+const makeImageStage =
+  (batch: 'images-1' | 'images-2') =>
+  async ({ context, payload, state }: StageArgs): Promise<void> => {
+    payload.logger.info(`— Generating placeholder imagery (${batch})…`)
+    for (const key of imageBatches[batch]) {
+      const [label, width, height, tone] = imageDefs[key]
+      const file = await makePlaceholderImage(label, width, height, tone)
+      const doc = await payload.create({
+        collection: 'media',
+        context,
+        data: { alt: `${label} [PLACEHOLDER — replace with a real photo]` },
+        file,
+      })
+      state.images[key] = doc.id as number
+    }
   }
 
-  const heroImg = await image('Community day on Blackburn Boulevard', 1920, 1080, 'loom')
-  const youthImg = await image('Youth club five-a-side', 1200, 800, 'brick')
-  const foodImg = await image('Food pantry volunteers', 1200, 800, 'moor')
-  const elderImg = await image('Elders tea afternoon', 1200, 800, 'gold')
-  const educationImg = await image('Homework club', 1200, 800, 'loom')
-  const environmentImg = await image('Corporation Park clean-up', 1200, 800, 'moor')
-  const internationalImg = await image('Water project, Sylhet', 1200, 800, 'brick')
-  const aboutImg = await image('Darwen Tower at dusk', 1200, 900, 'loom')
-  const appealImg = await image('Winter warmth appeal', 1200, 800, 'brick')
-  const eventImg1 = await image('Community iftar', 1200, 800, 'gold')
-  const eventImg2 = await image('Family fun day', 1200, 800, 'moor')
-  const eventImg3 = await image('Charity walk to Darwen Tower', 1200, 800, 'loom')
-  const newsImg1 = await image('New minibus arrival', 1200, 800, 'brick')
-  const newsImg2 = await image('Volunteer awards night', 1200, 800, 'loom')
-  const newsImg3 = await image('Pantry milestone', 1200, 800, 'moor')
-  const personImg = await image('Team member portrait', 800, 1000, 'cotton')
-  const partnerLogo1 = await image('Partner logo — council', 400, 200, 'cotton')
-  const partnerLogo2 = await image('Partner logo — foundation', 400, 200, 'cotton')
-  const partnerLogo3 = await image('Partner logo — housing', 400, 200, 'cotton')
-  const partnerLogo4 = await image('Partner logo — college', 400, 200, 'cotton')
-  const ogImg = await image('BBAlliance — stronger together', 1200, 630, 'loom')
+/* ------------------------------------------------------------------ */
+/* Stage: content — taxonomies, people, partners, testimonials, FAQs,   */
+/* projects                                                             */
+/* ------------------------------------------------------------------ */
 
-  /* ---------------------------------------------------------------- */
-  /* Taxonomies                                                         */
-  /* ---------------------------------------------------------------- */
+const stageContent = async ({ context, payload, state }: StageArgs): Promise<void> => {
   payload.logger.info('— Creating categories…')
   const projectCategoryNames = [
     'Youth',
@@ -143,30 +208,25 @@ export const seed = async ({
     'Environment',
     'International',
   ]
-  const projectCategories: Record<string, number> = {}
   for (const title of projectCategoryNames) {
     const doc = await payload.create({
       collection: 'project-categories',
       context,
       data: { title, slug: title.toLowerCase().replace(/\s+/g, '-') },
     })
-    projectCategories[title] = doc.id as number
+    state.projectCategories[title] = doc.id as number
   }
 
   const newsCategoryNames = ['Community', 'Fundraising', 'Volunteering']
-  const newsCategories: Record<string, number> = {}
   for (const title of newsCategoryNames) {
     const doc = await payload.create({
       collection: 'categories',
       context,
       data: { title, slug: title.toLowerCase() },
     })
-    newsCategories[title] = doc.id as number
+    state.newsCategories[title] = doc.id as number
   }
 
-  /* ---------------------------------------------------------------- */
-  /* People                                                             */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating people…')
   const people = [
     { name: 'Yusuf Patel [PLACEHOLDER — replace]', role: 'Chair of Trustees', personType: 'trustee', displayOrder: 1 },
@@ -178,7 +238,6 @@ export const seed = async ({
     { name: 'George Aspinall [PLACEHOLDER — replace]', role: 'Pantry Volunteer', personType: 'volunteer', displayOrder: 2 },
   ] as const
 
-  const personIds: number[] = []
   for (const person of people) {
     const doc = await payload.create({
       collection: 'people',
@@ -186,33 +245,29 @@ export const seed = async ({
       data: {
         ...person,
         personType: person.personType,
-        photo: personImg,
+        photo: state.images.person,
         bio: rt(
           `${person.name.replace(' [PLACEHOLDER — replace]', '')} has been part of BBAlliance since [PLACEHOLDER year]. [PLACEHOLDER — replace with a short, warm biography of two or three sentences.]`,
         ),
       },
     })
-    personIds.push(doc.id as number)
+    state.personIds.push(doc.id as number)
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Partners & testimonials & FAQs                                     */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating partners, testimonials, FAQs…')
   const partnerDefs = [
-    { name: 'Blackburn with Darwen Borough Council [PLACEHOLDER — replace]', logo: partnerLogo1, partnerType: 'partner', url: 'https://www.blackburn.gov.uk' },
-    { name: 'Lancashire Community Foundation [PLACEHOLDER — replace]', logo: partnerLogo2, partnerType: 'funder', url: 'https://example.org' },
-    { name: 'Together Housing [PLACEHOLDER — replace]', logo: partnerLogo3, partnerType: 'sponsor', url: 'https://example.org' },
-    { name: 'Blackburn College [PLACEHOLDER — replace]', logo: partnerLogo4, partnerType: 'partner', url: 'https://example.org' },
+    { name: 'Blackburn with Darwen Borough Council [PLACEHOLDER — replace]', logo: state.images.partnerCouncil, partnerType: 'partner', url: 'https://www.blackburn.gov.uk' },
+    { name: 'Lancashire Community Foundation [PLACEHOLDER — replace]', logo: state.images.partnerFoundation, partnerType: 'funder', url: 'https://example.org' },
+    { name: 'Together Housing [PLACEHOLDER — replace]', logo: state.images.partnerHousing, partnerType: 'sponsor', url: 'https://example.org' },
+    { name: 'Blackburn College [PLACEHOLDER — replace]', logo: state.images.partnerCollege, partnerType: 'partner', url: 'https://example.org' },
   ] as const
-  const partnerIds: number[] = []
   for (const partner of partnerDefs) {
     const doc = await payload.create({
       collection: 'partners',
       context,
       data: { ...partner, partnerType: partner.partnerType },
     })
-    partnerIds.push(doc.id as number)
+    state.partnerIds.push(doc.id as number)
   }
 
   const testimonialDefs = [
@@ -251,9 +306,6 @@ export const seed = async ({
     await payload.create({ collection: 'faqs', context, data: { ...faq, category: faq.category as 'general' } })
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Projects                                                           */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating projects…')
   const projectDefs = [
     {
@@ -262,7 +314,7 @@ export const seed = async ({
       category: 'Youth',
       status: 'ongoing',
       location: 'Bastwell, Blackburn',
-      coverImage: youthImg,
+      coverImage: state.images.youth,
       summary:
         'Twice-weekly sports, games and mentoring for 11–16s — a safe, welcoming space run by local volunteers. [PLACEHOLDER — replace]',
       impactStats: [
@@ -276,7 +328,7 @@ export const seed = async ({
       category: 'Food Support',
       status: 'ongoing',
       location: 'Audley Range, Blackburn',
-      coverImage: foodImg,
+      coverImage: state.images.food,
       summary:
         'A dignified, membership-style pantry: £3.50 a visit for a full basket of fresh food and cupboard staples. [PLACEHOLDER — replace]',
       impactStats: [
@@ -290,7 +342,7 @@ export const seed = async ({
       category: 'Elderly Care',
       status: 'ongoing',
       location: 'Darwen',
-      coverImage: elderImg,
+      coverImage: state.images.elder,
       summary:
         'Company, cake and a warm room for older neighbours — with door-to-door lifts from our volunteer drivers. [PLACEHOLDER — replace]',
       impactStats: [{ value: 45, label: 'regular members [PLACEHOLDER]' }],
@@ -301,7 +353,7 @@ export const seed = async ({
       category: 'Education',
       status: 'ongoing',
       location: 'Little Harwood, Blackburn',
-      coverImage: educationImg,
+      coverImage: state.images.education,
       summary:
         'Quiet desks, friendly tutors and free wifi, four nights a week — helping every child keep up. [PLACEHOLDER — replace]',
       impactStats: [{ value: 85, label: 'pupils supported each term [PLACEHOLDER]' }],
@@ -312,7 +364,7 @@ export const seed = async ({
       category: 'Environment',
       status: 'upcoming',
       location: 'Across Blackburn with Darwen',
-      coverImage: environmentImg,
+      coverImage: state.images.environment,
       summary:
         'Monthly litter-picks and planting days, street by street — kit provided, all ages welcome. [PLACEHOLDER — replace]',
       impactStats: [{ value: 40, label: 'bags collected per event [PLACEHOLDER]' }],
@@ -323,7 +375,7 @@ export const seed = async ({
       category: 'International',
       status: 'completed',
       location: 'Sylhet, Bangladesh',
-      coverImage: internationalImg,
+      coverImage: state.images.international,
       summary:
         'Working with a trusted local partner, we funded 12 tube wells serving around 1,800 people. [PLACEHOLDER — replace]',
       impactStats: [
@@ -333,9 +385,8 @@ export const seed = async ({
     },
   ] as const
 
-  const projectIds: number[] = []
   for (const project of projectDefs) {
-    const doc = await payload.create({
+    await payload.create({
       collection: 'projects',
       context,
       data: {
@@ -343,11 +394,11 @@ export const seed = async ({
         slug: project.slug,
         summary: project.summary,
         coverImage: project.coverImage,
-        categories: [projectCategories[project.category]],
+        categories: [state.projectCategories[project.category]],
         status: project.status,
         location: project.location,
         impactStats: [...project.impactStats],
-        partners: [partnerIds[0]],
+        partners: [state.partnerIds[0]],
         body: rt(
           `## What we do`,
           `${project.summary}`,
@@ -361,18 +412,21 @@ export const seed = async ({
         _status: 'published',
       },
     })
-    projectIds.push(doc.id as number)
   }
+}
 
-  /* ---------------------------------------------------------------- */
-  /* News                                                               */
-  /* ---------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Stage: more-content — news, events, appeals, vacancies, documents,   */
+/* forms                                                                */
+/* ------------------------------------------------------------------ */
+
+const stageMoreContent = async ({ context, payload, state }: StageArgs): Promise<void> => {
   payload.logger.info('— Creating news…')
   const newsDefs = [
     {
       title: 'Our new community minibus has arrived',
       slug: 'new-community-minibus',
-      heroImage: newsImg1,
+      heroImage: state.images.news1,
       category: 'Community',
       publishedAt: daysFromNow(-6),
       body: 'Thanks to your generosity and a grant from [PLACEHOLDER — funder name], our 16-seat minibus is finally here. It will run lifts to the Tuesday tea afternoons and take the youth club on trips across Lancashire. [PLACEHOLDER — replace with the full story.]',
@@ -380,7 +434,7 @@ export const seed = async ({
     {
       title: 'Volunteer awards night celebrates 60 local heroes',
       slug: 'volunteer-awards-night',
-      heroImage: newsImg2,
+      heroImage: state.images.news2,
       category: 'Volunteering',
       publishedAt: daysFromNow(-20),
       body: 'King George’s Hall was full as we said thank you to the volunteers who make everything possible. [PLACEHOLDER — replace with the full story and real names/photos with consent.]',
@@ -388,41 +442,36 @@ export const seed = async ({
     {
       title: 'Food pantry passes 300 member households',
       slug: 'pantry-300-households',
-      heroImage: newsImg3,
+      heroImage: state.images.news3,
       category: 'Fundraising',
       publishedAt: daysFromNow(-45),
       body: 'Three years after opening, the Neighbourhood Food Pantry now supports more than 300 households a week. [PLACEHOLDER — replace with the full story.]',
     },
   ]
-  const newsIds: number[] = []
   for (const article of newsDefs) {
-    const doc = await payload.create({
+    await payload.create({
       collection: 'news',
       context,
       data: {
         title: `${article.title} [PLACEHOLDER — replace]`,
         slug: article.slug,
         heroImage: article.heroImage,
-        categories: [newsCategories[article.category]],
-        authors: [personIds[3]],
+        categories: [state.newsCategories[article.category]],
+        authors: [state.personIds[3]],
         publishedAt: article.publishedAt,
         content: rt(article.body, '[PLACEHOLDER — add quotes, photos and details, then delete this line.]'),
         meta: { description: article.body.slice(0, 150) },
         _status: 'published',
       },
     })
-    newsIds.push(doc.id as number)
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Events                                                             */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating events…')
   const eventDefs = [
     {
       title: 'Family Fun Day [PLACEHOLDER — replace]',
       slug: 'family-fun-day',
-      coverImage: eventImg2,
+      coverImage: state.images.event2,
       startDate: daysFromNow(12, 11),
       endDate: daysFromNow(12, 15),
       venue: 'Corporation Park, Blackburn [PLACEHOLDER]',
@@ -431,7 +480,7 @@ export const seed = async ({
     {
       title: 'Charity Walk to Darwen Tower [PLACEHOLDER — replace]',
       slug: 'charity-walk-darwen-tower',
-      coverImage: eventImg3,
+      coverImage: state.images.event3,
       startDate: daysFromNow(26, 9),
       endDate: daysFromNow(26, 13),
       venue: 'Meet at Darwen Market Square [PLACEHOLDER]',
@@ -441,7 +490,7 @@ export const seed = async ({
     {
       title: 'Community Iftar [PLACEHOLDER — replace]',
       slug: 'community-iftar',
-      coverImage: eventImg1,
+      coverImage: state.images.event1,
       startDate: daysFromNow(40, 19),
       venue: 'Bangor Street Community Centre [PLACEHOLDER]',
       summary: 'Neighbours of all faiths and none breaking bread together — bring a dish if you can. [PLACEHOLDER]',
@@ -450,7 +499,7 @@ export const seed = async ({
     {
       title: 'Spring Jumble Sale [PLACEHOLDER — replace]',
       slug: 'spring-jumble-sale',
-      coverImage: eventImg2,
+      coverImage: state.images.event2,
       startDate: daysFromNow(-30, 10),
       endDate: daysFromNow(-30, 14),
       venue: 'St. Silas’ Church Hall [PLACEHOLDER]',
@@ -472,9 +521,6 @@ export const seed = async ({
     })
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Appeals                                                            */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating appeals…')
   const winterAppeal = await payload.create({
     collection: 'appeals',
@@ -490,13 +536,14 @@ export const seed = async ({
         '## What your gift buys',
         '£10 buys a heated blanket. £25 tops up a pre-payment meter for a week. £50 kits out a whole household for winter. [PLACEHOLDER — check amounts.]',
       ),
-      coverImage: appealImg,
+      coverImage: state.images.appeal,
       targetAmount: 15000,
       raisedAmount: 9250,
       endDate: daysFromNow(75),
       _status: 'published',
     },
   })
+  state.winterAppealId = winterAppeal.id as number
 
   await payload.create({
     collection: 'appeals',
@@ -506,7 +553,7 @@ export const seed = async ({
       slug: 'ramadan-food-parcels-2025',
       summary: 'COMPLETED: 400 food parcels delivered across the borough and to partners overseas. [PLACEHOLDER]',
       story: rt('Thanks to 300 generous donors this appeal beat its target. [PLACEHOLDER — replace with the wrap-up story and photos.]'),
-      coverImage: foodImg,
+      coverImage: state.images.food,
       targetAmount: 10000,
       raisedAmount: 11480,
       endDate: daysFromNow(-90),
@@ -514,9 +561,6 @@ export const seed = async ({
     },
   })
 
-  /* ---------------------------------------------------------------- */
-  /* Vacancies                                                          */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating vacancies…')
   const vacancyDefs = [
     {
@@ -574,9 +618,6 @@ export const seed = async ({
     })
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Document library                                                   */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating document library…')
   const documentDefs = [
     { title: 'Annual Report 2025 [PLACEHOLDER — replace]', year: 2025, documentCategory: 'report' },
@@ -598,11 +639,8 @@ export const seed = async ({
     })
   }
 
-  /* ---------------------------------------------------------------- */
-  /* Forms (form builder)                                               */
-  /* ---------------------------------------------------------------- */
   payload.logger.info('— Creating forms…')
-  const contactForm = await payload.create({
+  await payload.create({
     collection: 'forms',
     context,
     data: {
@@ -647,7 +685,7 @@ export const seed = async ({
     },
   })
 
-  const volunteerForm = await payload.create({
+  await payload.create({
     collection: 'forms',
     context,
     data: {
@@ -680,11 +718,19 @@ export const seed = async ({
       ],
     },
   })
+}
 
-  /* ---------------------------------------------------------------- */
-  /* Pages                                                              */
-  /* ---------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Stage: pages                                                         */
+/* ------------------------------------------------------------------ */
+
+const stagePages = async ({ context, payload, state }: StageArgs): Promise<void> => {
   payload.logger.info('— Creating pages…')
+
+  const winterAppealId = state.winterAppealId
+  if (winterAppealId === null) {
+    throw new Error('Seed stages ran out of order: "more-content" must run before "pages".')
+  }
 
   const policyPage = (title: string, slug: string, bodyIntro: string) =>
     payload.create({
@@ -765,7 +811,7 @@ export const seed = async ({
       slug: 'about-us',
       hero: {
         type: 'mediumImpact',
-        media: aboutImg,
+        media: state.images.about,
         richText: rt(
           '# Rooted in Blackburn and Darwen',
           'BBAlliance began around one kitchen table in [PLACEHOLDER year] with a simple idea: neighbours looking after neighbours.',
@@ -774,7 +820,7 @@ export const seed = async ({
       layout: [
         {
           blockType: 'imageTextSplit',
-          image: aboutImg,
+          image: state.images.about,
           imagePosition: 'right',
           richText: rt(
             '## Our story',
@@ -831,6 +877,7 @@ export const seed = async ({
       _status: 'published',
     },
   })
+  state.aboutPageId = aboutPage.id as number
 
   const trusteesPage = await payload.create({
     collection: 'pages',
@@ -858,8 +905,9 @@ export const seed = async ({
       _status: 'published',
     },
   })
+  state.trusteesPageId = trusteesPage.id as number
 
-  const homePage = await payload.create({
+  await payload.create({
     collection: 'pages',
     context,
     depth: 0,
@@ -868,7 +916,7 @@ export const seed = async ({
       slug: 'home',
       hero: {
         type: 'highImpact',
-        media: heroImg,
+        media: state.images.hero,
         richText: rt(
           '# Stronger together in Blackburn and Darwen',
           'We’re your neighbours — running youth clubs, a food pantry, elders’ groups and more, right here in the borough and beyond.',
@@ -897,7 +945,7 @@ export const seed = async ({
         },
         {
           blockType: 'appealProgress',
-          appeal: winterAppeal.id,
+          appeal: winterAppealId,
           showStory: false,
         },
         {
@@ -936,16 +984,24 @@ export const seed = async ({
         title: 'BBAlliance — community charity in Blackburn and Darwen',
         description:
           'BBAlliance runs youth clubs, a food pantry, elders’ groups and education projects across Blackburn with Darwen, and supports causes nationally and internationally.',
-        image: ogImg,
+        image: state.images.og,
       },
       _status: 'published',
     },
   })
+}
 
-  /* ---------------------------------------------------------------- */
-  /* Globals                                                            */
-  /* ---------------------------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Stage: globals                                                       */
+/* ------------------------------------------------------------------ */
+
+const stageGlobals = async ({ context, payload, state }: StageArgs): Promise<void> => {
   payload.logger.info('— Configuring globals…')
+
+  const { aboutPageId, trusteesPageId } = state
+  if (aboutPageId === null || trusteesPageId === null) {
+    throw new Error('Seed stages ran out of order: "pages" must run before "globals".')
+  }
 
   await payload.updateGlobal({
     slug: 'site-settings',
@@ -1021,7 +1077,7 @@ export const seed = async ({
       titleTemplate: '%s | BBAlliance',
       defaultDescription:
         'BBAlliance is a community charity in Blackburn and Darwen, Lancashire, running local projects and supporting causes nationally and internationally. [PLACEHOLDER — review]',
-      defaultOGImage: ogImg,
+      defaultOGImage: state.images.og,
       allowIndexing: true,
       legalName: 'BBAlliance [PLACEHOLDER — replace with registered name]',
       areaServed: 'Blackburn with Darwen, Lancashire, UK',
@@ -1072,7 +1128,7 @@ export const seed = async ({
     context,
     data: {
       navItems: [
-        { link: { type: 'reference', label: 'About us', reference: { relationTo: 'pages', value: aboutPage.id } } },
+        { link: { type: 'reference', label: 'About us', reference: { relationTo: 'pages', value: aboutPageId } } },
         {
           link: { type: 'custom', label: 'Our activities', url: '/activities' },
         },
@@ -1101,8 +1157,8 @@ export const seed = async ({
         {
           title: 'Explore',
           links: [
-            { link: { type: 'reference', label: 'About us', reference: { relationTo: 'pages', value: aboutPage.id } } },
-            { link: { type: 'reference', label: 'Trustees & staff', reference: { relationTo: 'pages', value: trusteesPage.id } } },
+            { link: { type: 'reference', label: 'About us', reference: { relationTo: 'pages', value: aboutPageId } } },
+            { link: { type: 'reference', label: 'Trustees & staff', reference: { relationTo: 'pages', value: trusteesPageId } } },
             { link: { type: 'custom', label: 'Our activities', url: '/activities' } },
             { link: { type: 'custom', label: 'Reports & documents', url: '/documents' } },
             { link: { type: 'custom', label: 'FAQs', url: '/faqs' } },
@@ -1129,17 +1185,76 @@ export const seed = async ({
       newsletterHeading: 'Stay in the loop',
     },
   })
+}
 
+/* ------------------------------------------------------------------ */
+/* Stage registry + public API                                          */
+/* ------------------------------------------------------------------ */
+
+const stageRunners: Record<SeedStageKey, (args: StageArgs) => Promise<void>> = {
+  reset: stageReset,
+  'images-1': makeImageStage('images-1'),
+  'images-2': makeImageStage('images-2'),
+  content: stageContent,
+  'more-content': stageMoreContent,
+  pages: stagePages,
+  globals: stageGlobals,
+}
+
+/**
+ * Runs a single seed stage and returns the updated state plus the key of the
+ * stage that should run next (null when finished). Used by the admin panel,
+ * which drives the seed one request per stage so no single serverless
+ * invocation gets anywhere near the platform time limit.
+ */
+export const runSeedStage = async ({
+  payload,
+  stageKey,
+  state,
+}: {
+  payload: Payload
+  stageKey: string
+  state?: Partial<SeedState> | null
+}): Promise<{ nextStage: SeedStageKey | null; state: SeedState }> => {
+  const index = seedStageList.findIndex((stage) => stage.key === stageKey)
+  if (index === -1) {
+    throw new Error(`Unknown seed stage "${stageKey}".`)
+  }
+
+  const fullState: SeedState = { ...emptySeedState(), ...(state ?? {}) }
+  const context = { disableRevalidate: true }
+
+  payload.logger.info(`Seeding BBAlliance demo content — stage ${index + 1}/${seedStageList.length}: ${stageKey}`)
+  await stageRunners[seedStageList[index].key]({ context, payload, state: fullState })
+
+  return {
+    nextStage: index + 1 < seedStageList.length ? seedStageList[index + 1].key : null,
+    state: fullState,
+  }
+}
+
+// Next.js revalidation errors are normal when seeding the database without a
+// server running (e.g. `pnpm seed`) — they can be safely ignored.
+export const seed = async ({
+  payload,
+  req,
+}: {
+  payload: Payload
+  req: PayloadRequest
+}): Promise<void> => {
+  payload.logger.info('Seeding BBAlliance demo content…')
+
+  const state = emptySeedState()
+  const context = { disableRevalidate: true }
+  for (const stage of seedStageList) {
+    await stageRunners[stage.key]({ context, payload, state })
+  }
+
+  const password = process.env.SEED_ADMIN_PASSWORD || 'bballiance-demo'
   payload.logger.info(
     `Seeded ✔ — demo sign-ins: admin@bballiance.org.uk / editor@… / contributor@… (password: ${password})`,
   )
   payload.logger.info('Every invented fact is marked [PLACEHOLDER — replace].')
 
-  // Quiet "unused" warnings for values kept for future seed phases.
-  void contactForm
-  void volunteerForm
-  void projectIds
-  void newsIds
-  void homePage
   void req
 }
