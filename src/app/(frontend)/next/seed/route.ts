@@ -3,7 +3,10 @@ import { seed } from '@/endpoints/seed'
 import config from '@payload-config'
 import { headers } from 'next/headers'
 
-export const maxDuration = 60 // This function can run for a maximum of 60 seconds
+// The seed generates ~21 placeholder images with sharp and uploads each to
+// object storage — comfortably over 60s on Hobby-tier CPUs. Vercel Hobby with
+// Fluid Compute (the default) allows up to 300 seconds.
+export const maxDuration = 300
 
 export async function POST(): Promise<Response> {
   const payload = await getPayload({ config })
