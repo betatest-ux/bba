@@ -380,7 +380,6 @@ export interface Media {
     };
     [k: string]: unknown;
   } | null;
-  prefix?: string | null;
   folder?: (number | null) | FolderInterface;
   updatedAt: string;
   createdAt: string;
@@ -1536,7 +1535,6 @@ export interface LibraryDocument {
   year: number;
   documentCategory: 'report' | 'accounts' | 'policy' | 'minutes' | 'other';
   description?: string | null;
-  prefix?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -1576,7 +1574,6 @@ export interface JobApplication {
  */
 export interface CvUpload {
   id: number;
-  prefix?: string | null;
   updatedAt: string;
   createdAt: string;
   url?: string | null;
@@ -2577,7 +2574,6 @@ export interface LibraryDocumentsSelect<T extends boolean = true> {
   year?: T;
   documentCategory?: T;
   description?: T;
-  prefix?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
@@ -2608,7 +2604,6 @@ export interface CategoriesSelect<T extends boolean = true> {
 export interface MediaSelect<T extends boolean = true> {
   alt?: T;
   caption?: T;
-  prefix?: T;
   folder?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2717,7 +2712,6 @@ export interface JobApplicationsSelect<T extends boolean = true> {
  * via the `definition` "cv-uploads_select".
  */
 export interface CvUploadsSelect<T extends boolean = true> {
-  prefix?: T;
   updatedAt?: T;
   createdAt?: T;
   url?: T;
