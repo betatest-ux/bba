@@ -20,7 +20,8 @@
     "test": "pnpm run test:int && pnpm run test:e2e",
     "test:e2e": "cross-env NODE_OPTIONS=\"--no-deprecation --import=tsx/esm\" playwright test --config=playwright.config.ts",
     "test:int": "cross-env NODE_OPTIONS=--no-deprecation vitest run --config ./vitest.config.mts",
-    "db:init": "cross-env NODE_ENV=development NODE_OPTIONS=--no-deprecation node --import tsx/esm -r dotenv/config src/scripts/init-db.ts"
+    "db:init": "cross-env NODE_ENV=development NODE_OPTIONS=--no-deprecation node --import tsx/esm -r dotenv/config src/scripts/init-db.ts",
+    "db:deploy": "cross-env NODE_OPTIONS=--no-deprecation payload migrate"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

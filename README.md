@@ -79,13 +79,21 @@ src/
 ## Database story
 
 - **Local dev**: SQLite (`DATABASE_URI=file:./bba.db`). Schema changes push
-  automatically in dev mode — no migrations needed.
-- **Production (Postgres)**: use Payload's migration workflow rather than dev push:
+  automatically in dev mode — no migrations needed. (`pnpm db:init` forces a one-off
+  push if you need it. **SQLite only** — never push against Postgres: drizzle's push
+  can't handle Payload's enum types reliably.)
+- **Production (Postgres)**: committed migrations in `src/migrations/`, applied with
+  `pnpm db:deploy` (part of the Vercel build command). After changing
+  collections/globals, generate the next migration against a Postgres database and
+  commit it:
 
   ```bash
-  pnpm payload migrate:create   # after changing collections/globals
-  pnpm payload migrate          # on deploy, before starting the app
+  DATABASE_URI=postgres://… pnpm payload migrate:create my_change
   ```
+
+  > Naming gotcha worth knowing: a custom field named `status` on a drafts-enabled
+  > collection collides with Payload's internal `_status` enum name in Postgres.
+  > Set `enumName` on the field (see `Projects.status`) to avoid it.
 
 ## Deployment
 
@@ -93,7 +101,8 @@ src/
 
 1. Create a Postgres database (Neon or Supabase free tier is fine) and copy the
    connection string.
-2. Import the repo into Vercel. Framework preset: Next.js. Build command `pnpm build`.
+2. Import the repo into Vercel. Framework preset: Next.js. Build command
+   `pnpm db:deploy && pnpm build` (applies the committed database migrations, then builds).
 3. Set the environment variables from the table above (`DATABASE_URI` = the Postgres URL,
    `NEXT_PUBLIC_SERVER_URL` = `https://bballiance.org.uk`).
 4. Add a Vercel Cron job hitting `/api/payload-jobs/run` every 5 minutes with the
@@ -131,7 +140,8 @@ src/
 ```bash
 cp .env.example .env         # set PAYLOAD_SECRET, POSTGRES_PASSWORD, NEXT_PUBLIC_SERVER_URL
 docker compose up -d --build
-docker compose exec app node --import tsx/esm -r dotenv/config src/scripts/seed.ts   # once
+docker compose exec app npx payload migrate                                        # once: create tables
+docker compose exec app node --import tsx/esm -r dotenv/config src/scripts/seed.ts # once: demo content
 ```
 
 Put a reverse proxy (Caddy/nginx) in front for TLS.

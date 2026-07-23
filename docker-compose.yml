@@ -3,7 +3,9 @@
 #
 #   docker compose up -d --build
 #
-# First run: docker compose exec app node --import tsx/esm -r dotenv/config src/scripts/seed.ts
+# First run (apply DB migrations, then optionally seed demo content):
+#   docker compose exec app npx cross-env NODE_OPTIONS=--no-deprecation npx payload migrate
+#   docker compose exec app node --import tsx/esm -r dotenv/config src/scripts/seed.ts
 
 services:
   app:

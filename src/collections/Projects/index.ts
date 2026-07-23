@@ -194,6 +194,10 @@ export const Projects: CollectionConfig<'projects'> = {
       type: 'select',
       admin: { position: 'sidebar' },
       defaultValue: 'ongoing',
+      // Without this, Postgres would name this enum "enum_projects_status" —
+      // the same name Payload generates for the drafts _status enum — and the
+      // collision breaks migrations with "invalid input value for enum".
+      enumName: 'enum_projects_activity_status',
       options: [
         { label: 'Ongoing', value: 'ongoing' },
         { label: 'Completed', value: 'completed' },
