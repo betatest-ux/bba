@@ -1,4 +1,4 @@
-import type { CollectionSlug, Payload, PayloadRequest } from 'payload'
+import type { CollectionSlug, Payload, PayloadRequest, RequiredDataFromCollectionSlug } from 'payload'
 
 import fs from 'fs/promises'
 import path from 'path'
@@ -65,24 +65,78 @@ type StageArgs = {
   state: SeedState
 }
 
+/**
+ * Slugs are unique, so a leftover document from an interrupted earlier run
+ * would fail the whole seed with "The following field is invalid: slug".
+ * Delete any same-slug document first, then run the create — and name the
+ * culprit if it still fails.
+ */
+const replaceBySlug = async <T>(
+  payload: Payload,
+  context: Record<string, unknown>,
+  collection: CollectionSlug,
+  slug: string,
+  create: () => Promise<T>,
+): Promise<T> => {
+  try {
+    await payload.delete({
+      collection,
+      where: { slug: { equals: slug } },
+      context,
+      depth: 0,
+    })
+    return await create()
+  } catch (error) {
+    throw new Error(`Creating ${collection} "${slug}" failed: ${(error as Error).message}`)
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Stage: reset — clear content, ensure demo users                      */
 /* ------------------------------------------------------------------ */
 
 const stageReset = async ({ context, payload }: StageArgs): Promise<void> => {
   payload.logger.info('— Clearing collections…')
-  for (const collection of collectionsToClear) {
+  // Deleting content writes entries to the activity log, so it gets cleared
+  // separately at the very end.
+  const contentCollections = collectionsToClear.filter((c) => c !== 'activity-log')
+  const clearFailures: Partial<Record<CollectionSlug, string>> = {}
+  for (const collection of contentCollections) {
     try {
-      await payload.delete({
+      const result = await payload.delete({
         collection,
         where: { id: { exists: true } },
         context,
         depth: 0,
       })
+      const firstError = result.errors?.[0]
+      if (firstError) {
+        clearFailures[collection] = firstError.message || 'unknown delete error'
+      }
     } catch (error) {
-      payload.logger.warn(`Could not clear ${collection}: ${(error as Error).message}`)
+      clearFailures[collection] = (error as Error).message
     }
   }
+
+  // Bulk deletes collect per-document failures instead of throwing. A
+  // partially cleared database would only blow up stages later (unique slug
+  // collisions), so verify emptiness here and fail loudly naming the blocker.
+  for (const collection of contentCollections) {
+    const remaining = await payload.count({ collection })
+    if (remaining.totalDocs > 0) {
+      const reason = clearFailures[collection] ? `: ${clearFailures[collection]}` : ''
+      throw new Error(
+        `Could not clear "${collection}" — ${remaining.totalDocs} document(s) would not delete${reason}`,
+      )
+    }
+  }
+
+  await payload.delete({
+    collection: 'activity-log',
+    where: { id: { exists: true } },
+    context,
+    depth: 0,
+  })
 
   payload.logger.info('— Ensuring demo users…')
   const demoUsers = [
@@ -251,21 +305,27 @@ const stageContent = async ({ context, payload, state }: StageArgs): Promise<voi
     'International',
   ]
   for (const title of projectCategoryNames) {
-    const doc = await payload.create({
-      collection: 'project-categories',
-      context,
-      data: { title, slug: title.toLowerCase().replace(/\s+/g, '-') },
-    })
+    const slug = title.toLowerCase().replace(/\s+/g, '-')
+    const doc = await replaceBySlug(payload, context, 'project-categories', slug, () =>
+      payload.create({
+        collection: 'project-categories',
+        context,
+        data: { title, slug },
+      }),
+    )
     state.projectCategories[title] = doc.id as number
   }
 
   const newsCategoryNames = ['Community', 'Fundraising', 'Volunteering']
   for (const title of newsCategoryNames) {
-    const doc = await payload.create({
-      collection: 'categories',
-      context,
-      data: { title, slug: title.toLowerCase() },
-    })
+    const slug = title.toLowerCase()
+    const doc = await replaceBySlug(payload, context, 'categories', slug, () =>
+      payload.create({
+        collection: 'categories',
+        context,
+        data: { title, slug },
+      }),
+    )
     state.newsCategories[title] = doc.id as number
   }
 
@@ -428,32 +488,34 @@ const stageContent = async ({ context, payload, state }: StageArgs): Promise<voi
   ] as const
 
   for (const project of projectDefs) {
-    await payload.create({
-      collection: 'projects',
-      context,
-      data: {
-        title: project.title,
-        slug: project.slug,
-        summary: project.summary,
-        coverImage: project.coverImage,
-        categories: [state.projectCategories[project.category]],
-        status: project.status,
-        location: project.location,
-        impactStats: [...project.impactStats],
-        partners: [state.partnerIds[0]],
-        body: rt(
-          `## What we do`,
-          `${project.summary}`,
-          `[PLACEHOLDER — replace with two or three paragraphs about ${project.title}: who it serves, when it runs, what a typical session looks like, and how people can join in.]`,
-          `## Get involved`,
-          `Want to help with ${project.title}? Visit our Get Involved page or drop us a line through the contact form.`,
-        ),
-        gallery: [
-          { image: project.coverImage, caption: 'Add real photos through the Media library [PLACEHOLDER]' },
-        ],
-        _status: 'published',
-      },
-    })
+    await replaceBySlug(payload, context, 'projects', project.slug, () =>
+      payload.create({
+        collection: 'projects',
+        context,
+        data: {
+          title: project.title,
+          slug: project.slug,
+          summary: project.summary,
+          coverImage: project.coverImage,
+          categories: [state.projectCategories[project.category]],
+          status: project.status,
+          location: project.location,
+          impactStats: [...project.impactStats],
+          partners: [state.partnerIds[0]],
+          body: rt(
+            `## What we do`,
+            `${project.summary}`,
+            `[PLACEHOLDER — replace with two or three paragraphs about ${project.title}: who it serves, when it runs, what a typical session looks like, and how people can join in.]`,
+            `## Get involved`,
+            `Want to help with ${project.title}? Visit our Get Involved page or drop us a line through the contact form.`,
+          ),
+          gallery: [
+            { image: project.coverImage, caption: 'Add real photos through the Media library [PLACEHOLDER]' },
+          ],
+          _status: 'published',
+        },
+      }),
+    )
   }
 }
 
@@ -491,21 +553,23 @@ const stageMoreContent = async ({ context, payload, state }: StageArgs): Promise
     },
   ]
   for (const article of newsDefs) {
-    await payload.create({
-      collection: 'news',
-      context,
-      data: {
-        title: `${article.title} [PLACEHOLDER — replace]`,
-        slug: article.slug,
-        heroImage: article.heroImage,
-        categories: [state.newsCategories[article.category]],
-        authors: [state.personIds[3]],
-        publishedAt: article.publishedAt,
-        content: rt(article.body, '[PLACEHOLDER — add quotes, photos and details, then delete this line.]'),
-        meta: { description: article.body.slice(0, 150) },
-        _status: 'published',
-      },
-    })
+    await replaceBySlug(payload, context, 'news', article.slug, () =>
+      payload.create({
+        collection: 'news',
+        context,
+        data: {
+          title: `${article.title} [PLACEHOLDER — replace]`,
+          slug: article.slug,
+          heroImage: article.heroImage,
+          categories: [state.newsCategories[article.category]],
+          authors: [state.personIds[3]],
+          publishedAt: article.publishedAt,
+          content: rt(article.body, '[PLACEHOLDER — add quotes, photos and details, then delete this line.]'),
+          meta: { description: article.body.slice(0, 150) },
+          _status: 'published',
+        },
+      }),
+    )
   }
 
   payload.logger.info('— Creating events…')
@@ -549,59 +613,65 @@ const stageMoreContent = async ({ context, payload, state }: StageArgs): Promise
     },
   ]
   for (const event of eventDefs) {
-    await payload.create({
-      collection: 'events',
-      context,
-      data: {
-        ...event,
-        description: rt(
-          event.summary,
-          '[PLACEHOLDER — add the full event details: timings, accessibility, parking, contact.]',
-        ),
-        _status: 'published',
-      },
-    })
+    await replaceBySlug(payload, context, 'events', event.slug, () =>
+      payload.create({
+        collection: 'events',
+        context,
+        data: {
+          ...event,
+          description: rt(
+            event.summary,
+            '[PLACEHOLDER — add the full event details: timings, accessibility, parking, contact.]',
+          ),
+          _status: 'published',
+        },
+      }),
+    )
   }
 
   payload.logger.info('— Creating appeals…')
-  const winterAppeal = await payload.create({
-    collection: 'appeals',
-    context,
-    data: {
-      title: 'Winter Warmth Appeal [PLACEHOLDER — replace]',
-      slug: 'winter-warmth-appeal',
-      summary:
-        'Help us keep 200 local households warm this winter with heated blankets, warm packs and energy top-up vouchers. [PLACEHOLDER]',
-      story: rt(
-        '## Why it matters',
-        'Cold homes make people ill. Last winter, our volunteers delivered warm packs to over 150 households across Blackburn and Darwen — this year the need is bigger. [PLACEHOLDER — replace with the real appeal story.]',
-        '## What your gift buys',
-        '£10 buys a heated blanket. £25 tops up a pre-payment meter for a week. £50 kits out a whole household for winter. [PLACEHOLDER — check amounts.]',
-      ),
-      coverImage: state.images.appeal,
-      targetAmount: 15000,
-      raisedAmount: 9250,
-      endDate: daysFromNow(75),
-      _status: 'published',
-    },
-  })
+  const winterAppeal = await replaceBySlug(payload, context, 'appeals', 'winter-warmth-appeal', () =>
+    payload.create({
+      collection: 'appeals',
+      context,
+      data: {
+        title: 'Winter Warmth Appeal [PLACEHOLDER — replace]',
+        slug: 'winter-warmth-appeal',
+        summary:
+          'Help us keep 200 local households warm this winter with heated blankets, warm packs and energy top-up vouchers. [PLACEHOLDER]',
+        story: rt(
+          '## Why it matters',
+          'Cold homes make people ill. Last winter, our volunteers delivered warm packs to over 150 households across Blackburn and Darwen — this year the need is bigger. [PLACEHOLDER — replace with the real appeal story.]',
+          '## What your gift buys',
+          '£10 buys a heated blanket. £25 tops up a pre-payment meter for a week. £50 kits out a whole household for winter. [PLACEHOLDER — check amounts.]',
+        ),
+        coverImage: state.images.appeal,
+        targetAmount: 15000,
+        raisedAmount: 9250,
+        endDate: daysFromNow(75),
+        _status: 'published',
+      },
+    }),
+  )
   state.winterAppealId = winterAppeal.id as number
 
-  await payload.create({
-    collection: 'appeals',
-    context,
-    data: {
-      title: 'Ramadan Food Parcels 2025 [PLACEHOLDER — replace]',
-      slug: 'ramadan-food-parcels-2025',
-      summary: 'COMPLETED: 400 food parcels delivered across the borough and to partners overseas. [PLACEHOLDER]',
-      story: rt('Thanks to 300 generous donors this appeal beat its target. [PLACEHOLDER — replace with the wrap-up story and photos.]'),
-      coverImage: state.images.food,
-      targetAmount: 10000,
-      raisedAmount: 11480,
-      endDate: daysFromNow(-90),
-      _status: 'published',
-    },
-  })
+  await replaceBySlug(payload, context, 'appeals', 'ramadan-food-parcels-2025', () =>
+    payload.create({
+      collection: 'appeals',
+      context,
+      data: {
+        title: 'Ramadan Food Parcels 2025 [PLACEHOLDER — replace]',
+        slug: 'ramadan-food-parcels-2025',
+        summary: 'COMPLETED: 400 food parcels delivered across the borough and to partners overseas. [PLACEHOLDER]',
+        story: rt('Thanks to 300 generous donors this appeal beat its target. [PLACEHOLDER — replace with the wrap-up story and photos.]'),
+        coverImage: state.images.food,
+        targetAmount: 10000,
+        raisedAmount: 11480,
+        endDate: daysFromNow(-90),
+        _status: 'published',
+      },
+    }),
+  )
 
   payload.logger.info('— Creating vacancies…')
   const vacancyDefs = [
@@ -641,23 +711,25 @@ const stageMoreContent = async ({ context, payload, state }: StageArgs): Promise
     },
   ] as const
   for (const vacancy of vacancyDefs) {
-    await payload.create({
-      collection: 'vacancies',
-      context,
-      data: {
-        ...vacancy,
-        vacancyType: vacancy.vacancyType,
-        description: rt(
-          '## About the role',
-          '[PLACEHOLDER — replace with the role description: what they’ll do, who they’ll work with, what a week looks like.]',
-          '## Who we’re looking for',
-          '[PLACEHOLDER — replace with the person specification. Keep it human — list what matters, not a wall of “essential criteria”.]',
-          '## How to apply',
-          'Use the application form below — we reply to every applicant within a week of the closing date.',
-        ),
-        _status: 'published',
-      },
-    })
+    await replaceBySlug(payload, context, 'vacancies', vacancy.slug, () =>
+      payload.create({
+        collection: 'vacancies',
+        context,
+        data: {
+          ...vacancy,
+          vacancyType: vacancy.vacancyType,
+          description: rt(
+            '## About the role',
+            '[PLACEHOLDER — replace with the role description: what they’ll do, who they’ll work with, what a week looks like.]',
+            '## Who we’re looking for',
+            '[PLACEHOLDER — replace with the person specification. Keep it human — list what matters, not a wall of “essential criteria”.]',
+            '## How to apply',
+            'Use the application form below — we reply to every applicant within a week of the closing date.',
+          ),
+          _status: 'published',
+        },
+      }),
+    )
   }
 
   payload.logger.info('— Creating document library…')
@@ -774,12 +846,13 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
     throw new Error('Seed stages ran out of order: "more-content" must run before "pages".')
   }
 
+  const createPage = (data: RequiredDataFromCollectionSlug<'pages'>) =>
+    replaceBySlug(payload, context, 'pages', String(data.slug), () =>
+      payload.create({ collection: 'pages', context, depth: 0, data }),
+    )
+
   const policyPage = (title: string, slug: string, bodyIntro: string) =>
-    payload.create({
-      collection: 'pages',
-      context,
-      depth: 0,
-      data: {
+    createPage({
         title,
         slug,
         hero: { type: 'lowImpact', richText: rt(`# ${title}`, 'Template text for the charity to review — this is a starting point, not legal advice. [PLACEHOLDER — review before launch]') },
@@ -802,15 +875,10 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
         ],
         meta: { description: `${title} for BBAlliance.` },
         _status: 'published',
-      },
     })
 
   // Editable 404 wording (used by the not-found page).
-  await payload.create({
-    collection: 'pages',
-    context,
-    depth: 0,
-    data: {
+  await createPage({
       title: 'Page Not Found (404 wording)',
       slug: 'page-not-found',
       hero: {
@@ -835,7 +903,6 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
       ],
       meta: { description: 'Page not found.' },
       _status: 'published',
-    },
   })
 
   await policyPage('Privacy Policy', 'privacy-policy', 'How BBAlliance collects, uses and protects personal information, in line with UK GDPR.')
@@ -844,11 +911,7 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
   await policyPage('Accessibility Statement', 'accessibility', 'We want everyone to be able to use this website. This page explains what we do to make it accessible, and how to tell us if something isn’t working for you.')
   await policyPage('Complaints Procedure', 'complaints', 'How to raise a concern or complaint about BBAlliance, and what happens next.')
 
-  const aboutPage = await payload.create({
-    collection: 'pages',
-    context,
-    depth: 0,
-    data: {
+  const aboutPage = await createPage({
       title: 'About Us',
       slug: 'about-us',
       hero: {
@@ -917,15 +980,10 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
         description: 'The story, mission and people of BBAlliance — a community charity in Blackburn and Darwen.',
       },
       _status: 'published',
-    },
   })
   state.aboutPageId = aboutPage.id as number
 
-  const trusteesPage = await payload.create({
-    collection: 'pages',
-    context,
-    depth: 0,
-    data: {
+  const trusteesPage = await createPage({
       title: 'Trustees & Staff',
       slug: 'trustees-and-staff',
       hero: {
@@ -945,15 +1003,10 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
       ],
       meta: { description: 'Meet the trustees, staff and volunteers of BBAlliance.' },
       _status: 'published',
-    },
   })
   state.trusteesPageId = trusteesPage.id as number
 
-  await payload.create({
-    collection: 'pages',
-    context,
-    depth: 0,
-    data: {
+  await createPage({
       title: 'Home',
       slug: 'home',
       hero: {
@@ -1029,7 +1082,6 @@ const stagePages = async ({ context, payload, state }: StageArgs): Promise<void>
         image: state.images.og,
       },
       _status: 'published',
-    },
   })
 }
 
