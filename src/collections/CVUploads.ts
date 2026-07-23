@@ -29,7 +29,14 @@ export const CVUploads: CollectionConfig = {
     description: 'CVs attached to job applications. Only admins and editors can open these.',
     group: 'Inbox',
   },
-  fields: [],
+  fields: [
+    {
+      // See the note on Media.prefix — keeps the schema storage-adapter-agnostic.
+      name: 'prefix',
+      type: 'text',
+      admin: { hidden: true, readOnly: true },
+    },
+  ],
   upload: {
     // Deliberately not under public/ — files go through the API with access control.
     staticDir: path.resolve(dirname, '../../private-uploads/cvs'),

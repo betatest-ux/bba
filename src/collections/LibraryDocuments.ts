@@ -64,6 +64,12 @@ export const LibraryDocuments: CollectionConfig = {
       type: 'textarea',
       localized: true,
     },
+    {
+      // See the note on Media.prefix — keeps the schema storage-adapter-agnostic.
+      name: 'prefix',
+      type: 'text',
+      admin: { hidden: true, readOnly: true },
+    },
   ],
   upload: {
     staticDir: path.resolve(dirname, '../../public/documents'),

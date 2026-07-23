@@ -42,6 +42,16 @@ export const Media: CollectionConfig = {
         },
       }),
     },
+    {
+      // The cloud-storage plugin stores its folder prefix here when a storage
+      // adapter (Vercel Blob / S3) is active. Declared explicitly so the DB
+      // schema is identical whether or not storage env vars are set — otherwise
+      // migrations generated without a token miss the column and production
+      // (which has one) fails with "column media.prefix does not exist".
+      name: 'prefix',
+      type: 'text',
+      admin: { hidden: true, readOnly: true },
+    },
   ],
   upload: {
     // Upload to the public/media directory in Next.js making them publicly accessible even outside of Payload

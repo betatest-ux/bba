@@ -94,6 +94,14 @@ src/
   > Naming gotcha worth knowing: a custom field named `status` on a drafts-enabled
   > collection collides with Payload's internal `_status` enum name in Postgres.
   > Set `enumName` on the field (see `Projects.status`) to avoid it.
+  >
+  > Second gotcha: the cloud-storage plugin adds a hidden `prefix` field to upload
+  > collections when a storage adapter is active, so the schema would depend on
+  > whether `BLOB_READ_WRITE_TOKEN`/`S3_BUCKET` happened to be set when the
+  > migration was generated. The three upload collections (Media, LibraryDocuments,
+  > CVUploads) therefore declare `prefix` explicitly — the plugin merges rather than
+  > duplicates it — so migrations come out identical either way. Keep it that way
+  > for any new upload collection.
 
 ## Deployment
 
