@@ -185,6 +185,10 @@ export default buildConfig({
     ...(process.env.BLOB_READ_WRITE_TOKEN
       ? [
           vercelBlobStorage({
+            // Vercel serverless rejects request bodies over ~4.5 MB; client
+            // uploads send files browser → Blob store directly, so admins can
+            // upload full-size photos. Token minting requires a logged-in user.
+            clientUploads: true,
             collections: {
               'cv-uploads': { prefix: 'cvs' },
               'library-documents': { prefix: 'documents' },

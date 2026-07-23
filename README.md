@@ -102,6 +102,13 @@ src/
   > CVUploads) therefore declare `prefix` explicitly — the plugin merges rather than
   > duplicates it — so migrations come out identical either way. Keep it that way
   > for any new upload collection.
+  >
+  > Related: the admin **import map** (`src/app/(payload)/admin/importMap.js`) also
+  > depends on which storage adapter is active when it's generated — with a Blob
+  > token set, it must contain `VercelBlobClientUploadHandler`, or `/admin` renders
+  > a blank page in production. `pnpm build` regenerates it automatically (so Vercel
+  > always builds with the right one), and the committed copy is generated with the
+  > adapter active.
 
 ## Deployment
 
